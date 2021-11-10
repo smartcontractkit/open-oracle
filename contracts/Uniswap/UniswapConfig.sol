@@ -2,6 +2,8 @@
 
 pragma solidity ^0.8.7;
 
+import "../Chainlink/AggregatorInterface.sol";
+
 interface CErc20 {
     function underlying() external view returns (address);
 }
@@ -9,9 +11,9 @@ interface CErc20 {
 contract UniswapConfig {
     /// @dev Describe how to interpret the fixedPrice in the TokenConfig.
     enum PriceSource {
-        FIXED_ETH, /// implies the fixedPrice is a constant multiple of the ETH price (which varies)
-        FIXED_USD, /// implies the fixedPrice is a constant multiple of the USD price (which is 1)
-        REPORTER   /// implies the price is set by the reporter
+        FIXED_ETH,  /// implies the fixedPrice is a constant multiple of the ETH price (which varies)
+        FIXED_USD,  /// implies the fixedPrice is a constant multiple of the USD price (which is 1)
+        PRICE_FEED  /// implies the price is set by the priceFeed
     }
 
     /// @dev Describe how the USD price should be determined for an asset.
@@ -23,8 +25,8 @@ contract UniswapConfig {
         PriceSource priceSource;
         uint256 fixedPrice;
         address uniswapMarket;
-        address reporter;
-        uint256 reporterMultiplier;
+        AggregatorInterface priceFeed;
+        uint256 priceFeedMultiplier;
         bool isUniswapReversed;
     }
 
@@ -251,77 +253,77 @@ contract UniswapConfig {
     address internal immutable uniswapMarket33;
     address internal immutable uniswapMarket34;
 
-    address internal immutable reporter00;
-    address internal immutable reporter01;
-    address internal immutable reporter02;
-    address internal immutable reporter03;
-    address internal immutable reporter04;
-    address internal immutable reporter05;
-    address internal immutable reporter06;
-    address internal immutable reporter07;
-    address internal immutable reporter08;
-    address internal immutable reporter09;
-    address internal immutable reporter10;
-    address internal immutable reporter11;
-    address internal immutable reporter12;
-    address internal immutable reporter13;
-    address internal immutable reporter14;
-    address internal immutable reporter15;
-    address internal immutable reporter16;
-    address internal immutable reporter17;
-    address internal immutable reporter18;
-    address internal immutable reporter19;
-    address internal immutable reporter20;
-    address internal immutable reporter21;
-    address internal immutable reporter22;
-    address internal immutable reporter23;
-    address internal immutable reporter24;
-    address internal immutable reporter25;
-    address internal immutable reporter26;
-    address internal immutable reporter27;
-    address internal immutable reporter28;
-    address internal immutable reporter29;
-    address internal immutable reporter30;
-    address internal immutable reporter31;
-    address internal immutable reporter32;
-    address internal immutable reporter33;
-    address internal immutable reporter34;
+    AggregatorInterface internal immutable priceFeed00;
+    AggregatorInterface internal immutable priceFeed01;
+    AggregatorInterface internal immutable priceFeed02;
+    AggregatorInterface internal immutable priceFeed03;
+    AggregatorInterface internal immutable priceFeed04;
+    AggregatorInterface internal immutable priceFeed05;
+    AggregatorInterface internal immutable priceFeed06;
+    AggregatorInterface internal immutable priceFeed07;
+    AggregatorInterface internal immutable priceFeed08;
+    AggregatorInterface internal immutable priceFeed09;
+    AggregatorInterface internal immutable priceFeed10;
+    AggregatorInterface internal immutable priceFeed11;
+    AggregatorInterface internal immutable priceFeed12;
+    AggregatorInterface internal immutable priceFeed13;
+    AggregatorInterface internal immutable priceFeed14;
+    AggregatorInterface internal immutable priceFeed15;
+    AggregatorInterface internal immutable priceFeed16;
+    AggregatorInterface internal immutable priceFeed17;
+    AggregatorInterface internal immutable priceFeed18;
+    AggregatorInterface internal immutable priceFeed19;
+    AggregatorInterface internal immutable priceFeed20;
+    AggregatorInterface internal immutable priceFeed21;
+    AggregatorInterface internal immutable priceFeed22;
+    AggregatorInterface internal immutable priceFeed23;
+    AggregatorInterface internal immutable priceFeed24;
+    AggregatorInterface internal immutable priceFeed25;
+    AggregatorInterface internal immutable priceFeed26;
+    AggregatorInterface internal immutable priceFeed27;
+    AggregatorInterface internal immutable priceFeed28;
+    AggregatorInterface internal immutable priceFeed29;
+    AggregatorInterface internal immutable priceFeed30;
+    AggregatorInterface internal immutable priceFeed31;
+    AggregatorInterface internal immutable priceFeed32;
+    AggregatorInterface internal immutable priceFeed33;
+    AggregatorInterface internal immutable priceFeed34;
 
-    uint256 internal immutable reporterMultiplier00;
-    uint256 internal immutable reporterMultiplier01;
-    uint256 internal immutable reporterMultiplier02;
-    uint256 internal immutable reporterMultiplier03;
-    uint256 internal immutable reporterMultiplier04;
-    uint256 internal immutable reporterMultiplier05;
-    uint256 internal immutable reporterMultiplier06;
-    uint256 internal immutable reporterMultiplier07;
-    uint256 internal immutable reporterMultiplier08;
-    uint256 internal immutable reporterMultiplier09;
-    uint256 internal immutable reporterMultiplier10;
-    uint256 internal immutable reporterMultiplier11;
-    uint256 internal immutable reporterMultiplier12;
-    uint256 internal immutable reporterMultiplier13;
-    uint256 internal immutable reporterMultiplier14;
-    uint256 internal immutable reporterMultiplier15;
-    uint256 internal immutable reporterMultiplier16;
-    uint256 internal immutable reporterMultiplier17;
-    uint256 internal immutable reporterMultiplier18;
-    uint256 internal immutable reporterMultiplier19;
-    uint256 internal immutable reporterMultiplier20;
-    uint256 internal immutable reporterMultiplier21;
-    uint256 internal immutable reporterMultiplier22;
-    uint256 internal immutable reporterMultiplier23;
-    uint256 internal immutable reporterMultiplier24;
-    uint256 internal immutable reporterMultiplier25;
-    uint256 internal immutable reporterMultiplier26;
-    uint256 internal immutable reporterMultiplier27;
-    uint256 internal immutable reporterMultiplier28;
-    uint256 internal immutable reporterMultiplier29;
-    uint256 internal immutable reporterMultiplier30;
-    uint256 internal immutable reporterMultiplier31;
-    uint256 internal immutable reporterMultiplier32;
-    uint256 internal immutable reporterMultiplier33;
-    uint256 internal immutable reporterMultiplier34;
+    uint256 internal immutable priceFeedMultiplier00;
+    uint256 internal immutable priceFeedMultiplier01;
+    uint256 internal immutable priceFeedMultiplier02;
+    uint256 internal immutable priceFeedMultiplier03;
+    uint256 internal immutable priceFeedMultiplier04;
+    uint256 internal immutable priceFeedMultiplier05;
+    uint256 internal immutable priceFeedMultiplier06;
+    uint256 internal immutable priceFeedMultiplier07;
+    uint256 internal immutable priceFeedMultiplier08;
+    uint256 internal immutable priceFeedMultiplier09;
+    uint256 internal immutable priceFeedMultiplier10;
+    uint256 internal immutable priceFeedMultiplier11;
+    uint256 internal immutable priceFeedMultiplier12;
+    uint256 internal immutable priceFeedMultiplier13;
+    uint256 internal immutable priceFeedMultiplier14;
+    uint256 internal immutable priceFeedMultiplier15;
+    uint256 internal immutable priceFeedMultiplier16;
+    uint256 internal immutable priceFeedMultiplier17;
+    uint256 internal immutable priceFeedMultiplier18;
+    uint256 internal immutable priceFeedMultiplier19;
+    uint256 internal immutable priceFeedMultiplier20;
+    uint256 internal immutable priceFeedMultiplier21;
+    uint256 internal immutable priceFeedMultiplier22;
+    uint256 internal immutable priceFeedMultiplier23;
+    uint256 internal immutable priceFeedMultiplier24;
+    uint256 internal immutable priceFeedMultiplier25;
+    uint256 internal immutable priceFeedMultiplier26;
+    uint256 internal immutable priceFeedMultiplier27;
+    uint256 internal immutable priceFeedMultiplier28;
+    uint256 internal immutable priceFeedMultiplier29;
+    uint256 internal immutable priceFeedMultiplier30;
+    uint256 internal immutable priceFeedMultiplier31;
+    uint256 internal immutable priceFeedMultiplier32;
+    uint256 internal immutable priceFeedMultiplier33;
+    uint256 internal immutable priceFeedMultiplier34;
 
     // Contract bytecode size optimisation:
     // Each bit i stores a bool, corresponding to the ith config.
@@ -551,77 +553,77 @@ contract UniswapConfig {
         uniswapMarket33 = get(configs, 33).uniswapMarket;
         uniswapMarket34 = get(configs, 34).uniswapMarket;
 
-        reporter00 = get(configs, 0).reporter;
-        reporter01 = get(configs, 1).reporter;
-        reporter02 = get(configs, 2).reporter;
-        reporter03 = get(configs, 3).reporter;
-        reporter04 = get(configs, 4).reporter;
-        reporter05 = get(configs, 5).reporter;
-        reporter06 = get(configs, 6).reporter;
-        reporter07 = get(configs, 7).reporter;
-        reporter08 = get(configs, 8).reporter;
-        reporter09 = get(configs, 9).reporter;
-        reporter10 = get(configs, 10).reporter;
-        reporter11 = get(configs, 11).reporter;
-        reporter12 = get(configs, 12).reporter;
-        reporter13 = get(configs, 13).reporter;
-        reporter14 = get(configs, 14).reporter;
-        reporter15 = get(configs, 15).reporter;
-        reporter16 = get(configs, 16).reporter;
-        reporter17 = get(configs, 17).reporter;
-        reporter18 = get(configs, 18).reporter;
-        reporter19 = get(configs, 19).reporter;
-        reporter20 = get(configs, 20).reporter;
-        reporter21 = get(configs, 21).reporter;
-        reporter22 = get(configs, 22).reporter;
-        reporter23 = get(configs, 23).reporter;
-        reporter24 = get(configs, 24).reporter;
-        reporter25 = get(configs, 25).reporter;
-        reporter26 = get(configs, 26).reporter;
-        reporter27 = get(configs, 27).reporter;
-        reporter28 = get(configs, 28).reporter;
-        reporter29 = get(configs, 29).reporter;
-        reporter30 = get(configs, 30).reporter;
-        reporter31 = get(configs, 31).reporter;
-        reporter32 = get(configs, 32).reporter;
-        reporter33 = get(configs, 33).reporter;
-        reporter34 = get(configs, 34).reporter;
+        priceFeed00 = get(configs, 0).priceFeed;
+        priceFeed01 = get(configs, 1).priceFeed;
+        priceFeed02 = get(configs, 2).priceFeed;
+        priceFeed03 = get(configs, 3).priceFeed;
+        priceFeed04 = get(configs, 4).priceFeed;
+        priceFeed05 = get(configs, 5).priceFeed;
+        priceFeed06 = get(configs, 6).priceFeed;
+        priceFeed07 = get(configs, 7).priceFeed;
+        priceFeed08 = get(configs, 8).priceFeed;
+        priceFeed09 = get(configs, 9).priceFeed;
+        priceFeed10 = get(configs, 10).priceFeed;
+        priceFeed11 = get(configs, 11).priceFeed;
+        priceFeed12 = get(configs, 12).priceFeed;
+        priceFeed13 = get(configs, 13).priceFeed;
+        priceFeed14 = get(configs, 14).priceFeed;
+        priceFeed15 = get(configs, 15).priceFeed;
+        priceFeed16 = get(configs, 16).priceFeed;
+        priceFeed17 = get(configs, 17).priceFeed;
+        priceFeed18 = get(configs, 18).priceFeed;
+        priceFeed19 = get(configs, 19).priceFeed;
+        priceFeed20 = get(configs, 20).priceFeed;
+        priceFeed21 = get(configs, 21).priceFeed;
+        priceFeed22 = get(configs, 22).priceFeed;
+        priceFeed23 = get(configs, 23).priceFeed;
+        priceFeed24 = get(configs, 24).priceFeed;
+        priceFeed25 = get(configs, 25).priceFeed;
+        priceFeed26 = get(configs, 26).priceFeed;
+        priceFeed27 = get(configs, 27).priceFeed;
+        priceFeed28 = get(configs, 28).priceFeed;
+        priceFeed29 = get(configs, 29).priceFeed;
+        priceFeed30 = get(configs, 30).priceFeed;
+        priceFeed31 = get(configs, 31).priceFeed;
+        priceFeed32 = get(configs, 32).priceFeed;
+        priceFeed33 = get(configs, 33).priceFeed;
+        priceFeed34 = get(configs, 34).priceFeed;
 
-        reporterMultiplier00 = get(configs, 0).reporterMultiplier;
-        reporterMultiplier01 = get(configs, 1).reporterMultiplier;
-        reporterMultiplier02 = get(configs, 2).reporterMultiplier;
-        reporterMultiplier03 = get(configs, 3).reporterMultiplier;
-        reporterMultiplier04 = get(configs, 4).reporterMultiplier;
-        reporterMultiplier05 = get(configs, 5).reporterMultiplier;
-        reporterMultiplier06 = get(configs, 6).reporterMultiplier;
-        reporterMultiplier07 = get(configs, 7).reporterMultiplier;
-        reporterMultiplier08 = get(configs, 8).reporterMultiplier;
-        reporterMultiplier09 = get(configs, 9).reporterMultiplier;
-        reporterMultiplier10 = get(configs, 10).reporterMultiplier;
-        reporterMultiplier11 = get(configs, 11).reporterMultiplier;
-        reporterMultiplier12 = get(configs, 12).reporterMultiplier;
-        reporterMultiplier13 = get(configs, 13).reporterMultiplier;
-        reporterMultiplier14 = get(configs, 14).reporterMultiplier;
-        reporterMultiplier15 = get(configs, 15).reporterMultiplier;
-        reporterMultiplier16 = get(configs, 16).reporterMultiplier;
-        reporterMultiplier17 = get(configs, 17).reporterMultiplier;
-        reporterMultiplier18 = get(configs, 18).reporterMultiplier;
-        reporterMultiplier19 = get(configs, 19).reporterMultiplier;
-        reporterMultiplier20 = get(configs, 20).reporterMultiplier;
-        reporterMultiplier21 = get(configs, 21).reporterMultiplier;
-        reporterMultiplier22 = get(configs, 22).reporterMultiplier;
-        reporterMultiplier23 = get(configs, 23).reporterMultiplier;
-        reporterMultiplier24 = get(configs, 24).reporterMultiplier;
-        reporterMultiplier25 = get(configs, 25).reporterMultiplier;
-        reporterMultiplier26 = get(configs, 26).reporterMultiplier;
-        reporterMultiplier27 = get(configs, 27).reporterMultiplier;
-        reporterMultiplier28 = get(configs, 28).reporterMultiplier;
-        reporterMultiplier29 = get(configs, 29).reporterMultiplier;
-        reporterMultiplier30 = get(configs, 30).reporterMultiplier;
-        reporterMultiplier31 = get(configs, 31).reporterMultiplier;
-        reporterMultiplier32 = get(configs, 32).reporterMultiplier;
-        reporterMultiplier33 = get(configs, 33).reporterMultiplier;
-        reporterMultiplier34 = get(configs, 34).reporterMultiplier;
+        priceFeedMultiplier00 = get(configs, 0).priceFeedMultiplier;
+        priceFeedMultiplier01 = get(configs, 1).priceFeedMultiplier;
+        priceFeedMultiplier02 = get(configs, 2).priceFeedMultiplier;
+        priceFeedMultiplier03 = get(configs, 3).priceFeedMultiplier;
+        priceFeedMultiplier04 = get(configs, 4).priceFeedMultiplier;
+        priceFeedMultiplier05 = get(configs, 5).priceFeedMultiplier;
+        priceFeedMultiplier06 = get(configs, 6).priceFeedMultiplier;
+        priceFeedMultiplier07 = get(configs, 7).priceFeedMultiplier;
+        priceFeedMultiplier08 = get(configs, 8).priceFeedMultiplier;
+        priceFeedMultiplier09 = get(configs, 9).priceFeedMultiplier;
+        priceFeedMultiplier10 = get(configs, 10).priceFeedMultiplier;
+        priceFeedMultiplier11 = get(configs, 11).priceFeedMultiplier;
+        priceFeedMultiplier12 = get(configs, 12).priceFeedMultiplier;
+        priceFeedMultiplier13 = get(configs, 13).priceFeedMultiplier;
+        priceFeedMultiplier14 = get(configs, 14).priceFeedMultiplier;
+        priceFeedMultiplier15 = get(configs, 15).priceFeedMultiplier;
+        priceFeedMultiplier16 = get(configs, 16).priceFeedMultiplier;
+        priceFeedMultiplier17 = get(configs, 17).priceFeedMultiplier;
+        priceFeedMultiplier18 = get(configs, 18).priceFeedMultiplier;
+        priceFeedMultiplier19 = get(configs, 19).priceFeedMultiplier;
+        priceFeedMultiplier20 = get(configs, 20).priceFeedMultiplier;
+        priceFeedMultiplier21 = get(configs, 21).priceFeedMultiplier;
+        priceFeedMultiplier22 = get(configs, 22).priceFeedMultiplier;
+        priceFeedMultiplier23 = get(configs, 23).priceFeedMultiplier;
+        priceFeedMultiplier24 = get(configs, 24).priceFeedMultiplier;
+        priceFeedMultiplier25 = get(configs, 25).priceFeedMultiplier;
+        priceFeedMultiplier26 = get(configs, 26).priceFeedMultiplier;
+        priceFeedMultiplier27 = get(configs, 27).priceFeedMultiplier;
+        priceFeedMultiplier28 = get(configs, 28).priceFeedMultiplier;
+        priceFeedMultiplier29 = get(configs, 29).priceFeedMultiplier;
+        priceFeedMultiplier30 = get(configs, 30).priceFeedMultiplier;
+        priceFeedMultiplier31 = get(configs, 31).priceFeedMultiplier;
+        priceFeedMultiplier32 = get(configs, 32).priceFeedMultiplier;
+        priceFeedMultiplier33 = get(configs, 33).priceFeedMultiplier;
+        priceFeedMultiplier34 = get(configs, 34).priceFeedMultiplier;
 
         TokenConfig memory config;
         uint64 isUniswapReversed_ = 0;
@@ -643,48 +645,48 @@ contract UniswapConfig {
             priceSource: PriceSource(0),
             fixedPrice: uint256(0),
             uniswapMarket: address(0),
-            reporter: address(0),
-            reporterMultiplier: uint256(0),
+            priceFeed: AggregatorInterface(address(0)),
+            priceFeedMultiplier: uint256(0),
             isUniswapReversed: false
         });
     }
 
-    function getReporterIndex(address reporter) internal view returns(uint) {
-        if (reporter == reporter00) return 0;
-        if (reporter == reporter01) return 1;
-        if (reporter == reporter02) return 2;
-        if (reporter == reporter03) return 3;
-        if (reporter == reporter04) return 4;
-        if (reporter == reporter05) return 5;
-        if (reporter == reporter06) return 6;
-        if (reporter == reporter07) return 7;
-        if (reporter == reporter08) return 8;
-        if (reporter == reporter09) return 9;
-        if (reporter == reporter10) return 10;
-        if (reporter == reporter11) return 11;
-        if (reporter == reporter12) return 12;
-        if (reporter == reporter13) return 13;
-        if (reporter == reporter14) return 14;
-        if (reporter == reporter15) return 15;
-        if (reporter == reporter16) return 16;
-        if (reporter == reporter17) return 17;
-        if (reporter == reporter18) return 18;
-        if (reporter == reporter19) return 19;
-        if (reporter == reporter20) return 20;
-        if (reporter == reporter21) return 21;
-        if (reporter == reporter22) return 22;
-        if (reporter == reporter23) return 23;
-        if (reporter == reporter24) return 24;
-        if (reporter == reporter25) return 25;
-        if (reporter == reporter26) return 26;
-        if (reporter == reporter27) return 27;
-        if (reporter == reporter28) return 28;
-        if (reporter == reporter29) return 29;
-        if (reporter == reporter30) return 30;
-        if (reporter == reporter31) return 31;
-        if (reporter == reporter32) return 32;
-        if (reporter == reporter33) return 33;
-        if (reporter == reporter34) return 34;
+    function getPriceFeedIndex(AggregatorInterface priceFeed) internal view returns(uint) {
+        if (priceFeed == priceFeed00) return 0;
+        if (priceFeed == priceFeed01) return 1;
+        if (priceFeed == priceFeed02) return 2;
+        if (priceFeed == priceFeed03) return 3;
+        if (priceFeed == priceFeed04) return 4;
+        if (priceFeed == priceFeed05) return 5;
+        if (priceFeed == priceFeed06) return 6;
+        if (priceFeed == priceFeed07) return 7;
+        if (priceFeed == priceFeed08) return 8;
+        if (priceFeed == priceFeed09) return 9;
+        if (priceFeed == priceFeed10) return 10;
+        if (priceFeed == priceFeed11) return 11;
+        if (priceFeed == priceFeed12) return 12;
+        if (priceFeed == priceFeed13) return 13;
+        if (priceFeed == priceFeed14) return 14;
+        if (priceFeed == priceFeed15) return 15;
+        if (priceFeed == priceFeed16) return 16;
+        if (priceFeed == priceFeed17) return 17;
+        if (priceFeed == priceFeed18) return 18;
+        if (priceFeed == priceFeed19) return 19;
+        if (priceFeed == priceFeed20) return 20;
+        if (priceFeed == priceFeed21) return 21;
+        if (priceFeed == priceFeed22) return 22;
+        if (priceFeed == priceFeed23) return 23;
+        if (priceFeed == priceFeed24) return 24;
+        if (priceFeed == priceFeed25) return 25;
+        if (priceFeed == priceFeed26) return 26;
+        if (priceFeed == priceFeed27) return 27;
+        if (priceFeed == priceFeed28) return 28;
+        if (priceFeed == priceFeed29) return 29;
+        if (priceFeed == priceFeed30) return 30;
+        if (priceFeed == priceFeed31) return 31;
+        if (priceFeed == priceFeed32) return 32;
+        if (priceFeed == priceFeed33) return 33;
+        if (priceFeed == priceFeed34) return 34;
 
         return type(uint).max;
     }
@@ -783,8 +785,8 @@ contract UniswapConfig {
         PriceSource priceSource;
         uint256 fixedPrice;
         address uniswapMarket;
-        address reporter;
-        uint256 reporterMultiplier;
+        AggregatorInterface priceFeed;
+        uint256 priceFeedMultiplier;
         if (i == 0) {
             underlying = underlying00;
             symbolHash = symbolHash00;
@@ -792,8 +794,8 @@ contract UniswapConfig {
             priceSource = priceSource00;
             fixedPrice = fixedPrice00;
             uniswapMarket = uniswapMarket00;
-            reporter = reporter00;
-            reporterMultiplier = reporterMultiplier00;
+            priceFeed = priceFeed00;
+            priceFeedMultiplier = priceFeedMultiplier00;
         }
         if (i == 1) {
             underlying = underlying01;
@@ -802,8 +804,8 @@ contract UniswapConfig {
             priceSource = priceSource01;
             fixedPrice = fixedPrice01;
             uniswapMarket = uniswapMarket01;
-            reporter = reporter01;
-            reporterMultiplier = reporterMultiplier01;
+            priceFeed = priceFeed01;
+            priceFeedMultiplier = priceFeedMultiplier01;
         }
         if (i == 2) {
             underlying = underlying02;
@@ -812,8 +814,8 @@ contract UniswapConfig {
             priceSource = priceSource02;
             fixedPrice = fixedPrice02;
             uniswapMarket = uniswapMarket02;
-            reporter = reporter02;
-            reporterMultiplier = reporterMultiplier02;
+            priceFeed = priceFeed02;
+            priceFeedMultiplier = priceFeedMultiplier02;
         }
         if (i == 3) {
             underlying = underlying03;
@@ -822,8 +824,8 @@ contract UniswapConfig {
             priceSource = priceSource03;
             fixedPrice = fixedPrice03;
             uniswapMarket = uniswapMarket03;
-            reporter = reporter03;
-            reporterMultiplier = reporterMultiplier03;
+            priceFeed = priceFeed03;
+            priceFeedMultiplier = priceFeedMultiplier03;
         }
         if (i == 4) {
             underlying = underlying04;
@@ -832,8 +834,8 @@ contract UniswapConfig {
             priceSource = priceSource04;
             fixedPrice = fixedPrice04;
             uniswapMarket = uniswapMarket04;
-            reporter = reporter04;
-            reporterMultiplier = reporterMultiplier04;
+            priceFeed = priceFeed04;
+            priceFeedMultiplier = priceFeedMultiplier04;
         }
         if (i == 5) {
             underlying = underlying05;
@@ -842,8 +844,8 @@ contract UniswapConfig {
             priceSource = priceSource05;
             fixedPrice = fixedPrice05;
             uniswapMarket = uniswapMarket05;
-            reporter = reporter05;
-            reporterMultiplier = reporterMultiplier05;
+            priceFeed = priceFeed05;
+            priceFeedMultiplier = priceFeedMultiplier05;
         }
         if (i == 6) {
             underlying = underlying06;
@@ -852,8 +854,8 @@ contract UniswapConfig {
             priceSource = priceSource06;
             fixedPrice = fixedPrice06;
             uniswapMarket = uniswapMarket06;
-            reporter = reporter06;
-            reporterMultiplier = reporterMultiplier06;
+            priceFeed = priceFeed06;
+            priceFeedMultiplier = priceFeedMultiplier06;
         }
         if (i == 7) {
             underlying = underlying07;
@@ -862,8 +864,8 @@ contract UniswapConfig {
             priceSource = priceSource07;
             fixedPrice = fixedPrice07;
             uniswapMarket = uniswapMarket07;
-            reporter = reporter07;
-            reporterMultiplier = reporterMultiplier07;
+            priceFeed = priceFeed07;
+            priceFeedMultiplier = priceFeedMultiplier07;
         }
         if (i == 8) {
             underlying = underlying08;
@@ -872,8 +874,8 @@ contract UniswapConfig {
             priceSource = priceSource08;
             fixedPrice = fixedPrice08;
             uniswapMarket = uniswapMarket08;
-            reporter = reporter08;
-            reporterMultiplier = reporterMultiplier08;
+            priceFeed = priceFeed08;
+            priceFeedMultiplier = priceFeedMultiplier08;
         }
         if (i == 9) {
             underlying = underlying09;
@@ -882,8 +884,8 @@ contract UniswapConfig {
             priceSource = priceSource09;
             fixedPrice = fixedPrice09;
             uniswapMarket = uniswapMarket09;
-            reporter = reporter09;
-            reporterMultiplier = reporterMultiplier09;
+            priceFeed = priceFeed09;
+            priceFeedMultiplier = priceFeedMultiplier09;
         }
         if (i == 10) {
             underlying = underlying10;
@@ -892,8 +894,8 @@ contract UniswapConfig {
             priceSource = priceSource10;
             fixedPrice = fixedPrice10;
             uniswapMarket = uniswapMarket10;
-            reporter = reporter10;
-            reporterMultiplier = reporterMultiplier10;
+            priceFeed = priceFeed10;
+            priceFeedMultiplier = priceFeedMultiplier10;
         }
         if (i == 11) {
             underlying = underlying11;
@@ -902,8 +904,8 @@ contract UniswapConfig {
             priceSource = priceSource11;
             fixedPrice = fixedPrice11;
             uniswapMarket = uniswapMarket11;
-            reporter = reporter11;
-            reporterMultiplier = reporterMultiplier11;
+            priceFeed = priceFeed11;
+            priceFeedMultiplier = priceFeedMultiplier11;
         }
         if (i == 12) {
             underlying = underlying12;
@@ -912,8 +914,8 @@ contract UniswapConfig {
             priceSource = priceSource12;
             fixedPrice = fixedPrice12;
             uniswapMarket = uniswapMarket12;
-            reporter = reporter12;
-            reporterMultiplier = reporterMultiplier12;
+            priceFeed = priceFeed12;
+            priceFeedMultiplier = priceFeedMultiplier12;
         }
         if (i == 13) {
             underlying = underlying13;
@@ -922,8 +924,8 @@ contract UniswapConfig {
             priceSource = priceSource13;
             fixedPrice = fixedPrice13;
             uniswapMarket = uniswapMarket13;
-            reporter = reporter13;
-            reporterMultiplier = reporterMultiplier13;
+            priceFeed = priceFeed13;
+            priceFeedMultiplier = priceFeedMultiplier13;
         }
         if (i == 14) {
             underlying = underlying14;
@@ -932,8 +934,8 @@ contract UniswapConfig {
             priceSource = priceSource14;
             fixedPrice = fixedPrice14;
             uniswapMarket = uniswapMarket14;
-            reporter = reporter14;
-            reporterMultiplier = reporterMultiplier14;
+            priceFeed = priceFeed14;
+            priceFeedMultiplier = priceFeedMultiplier14;
         }
         if (i == 15) {
             underlying = underlying15;
@@ -942,8 +944,8 @@ contract UniswapConfig {
             priceSource = priceSource15;
             fixedPrice = fixedPrice15;
             uniswapMarket = uniswapMarket15;
-            reporter = reporter15;
-            reporterMultiplier = reporterMultiplier15;
+            priceFeed = priceFeed15;
+            priceFeedMultiplier = priceFeedMultiplier15;
         }
         if (i == 16) {
             underlying = underlying16;
@@ -952,8 +954,8 @@ contract UniswapConfig {
             priceSource = priceSource16;
             fixedPrice = fixedPrice16;
             uniswapMarket = uniswapMarket16;
-            reporter = reporter16;
-            reporterMultiplier = reporterMultiplier16;
+            priceFeed = priceFeed16;
+            priceFeedMultiplier = priceFeedMultiplier16;
         }
         if (i == 17) {
             underlying = underlying17;
@@ -962,8 +964,8 @@ contract UniswapConfig {
             priceSource = priceSource17;
             fixedPrice = fixedPrice17;
             uniswapMarket = uniswapMarket17;
-            reporter = reporter17;
-            reporterMultiplier = reporterMultiplier17;
+            priceFeed = priceFeed17;
+            priceFeedMultiplier = priceFeedMultiplier17;
         }
         if (i == 18) {
             underlying = underlying18;
@@ -972,8 +974,8 @@ contract UniswapConfig {
             priceSource = priceSource18;
             fixedPrice = fixedPrice18;
             uniswapMarket = uniswapMarket18;
-            reporter = reporter18;
-            reporterMultiplier = reporterMultiplier18;
+            priceFeed = priceFeed18;
+            priceFeedMultiplier = priceFeedMultiplier18;
         }
         if (i == 19) {
             underlying = underlying19;
@@ -982,8 +984,8 @@ contract UniswapConfig {
             priceSource = priceSource19;
             fixedPrice = fixedPrice19;
             uniswapMarket = uniswapMarket19;
-            reporter = reporter19;
-            reporterMultiplier = reporterMultiplier19;
+            priceFeed = priceFeed19;
+            priceFeedMultiplier = priceFeedMultiplier19;
         }
         if (i == 20) {
             underlying = underlying20;
@@ -992,8 +994,8 @@ contract UniswapConfig {
             priceSource = priceSource20;
             fixedPrice = fixedPrice20;
             uniswapMarket = uniswapMarket20;
-            reporter = reporter20;
-            reporterMultiplier = reporterMultiplier20;
+            priceFeed = priceFeed20;
+            priceFeedMultiplier = priceFeedMultiplier20;
         }
         if (i == 21) {
             underlying = underlying21;
@@ -1002,8 +1004,8 @@ contract UniswapConfig {
             priceSource = priceSource21;
             fixedPrice = fixedPrice21;
             uniswapMarket = uniswapMarket21;
-            reporter = reporter21;
-            reporterMultiplier = reporterMultiplier21;
+            priceFeed = priceFeed21;
+            priceFeedMultiplier = priceFeedMultiplier21;
         }
         if (i == 22) {
             underlying = underlying22;
@@ -1012,8 +1014,8 @@ contract UniswapConfig {
             priceSource = priceSource22;
             fixedPrice = fixedPrice22;
             uniswapMarket = uniswapMarket22;
-            reporter = reporter22;
-            reporterMultiplier = reporterMultiplier22;
+            priceFeed = priceFeed22;
+            priceFeedMultiplier = priceFeedMultiplier22;
         }
         if (i == 23) {
             underlying = underlying23;
@@ -1022,8 +1024,8 @@ contract UniswapConfig {
             priceSource = priceSource23;
             fixedPrice = fixedPrice23;
             uniswapMarket = uniswapMarket23;
-            reporter = reporter23;
-            reporterMultiplier = reporterMultiplier23;
+            priceFeed = priceFeed23;
+            priceFeedMultiplier = priceFeedMultiplier23;
         }
         if (i == 24) {
             underlying = underlying24;
@@ -1032,8 +1034,8 @@ contract UniswapConfig {
             priceSource = priceSource24;
             fixedPrice = fixedPrice24;
             uniswapMarket = uniswapMarket24;
-            reporter = reporter24;
-            reporterMultiplier = reporterMultiplier24;
+            priceFeed = priceFeed24;
+            priceFeedMultiplier = priceFeedMultiplier24;
         }
         if (i == 25) {
             underlying = underlying25;
@@ -1042,8 +1044,8 @@ contract UniswapConfig {
             priceSource = priceSource25;
             fixedPrice = fixedPrice25;
             uniswapMarket = uniswapMarket25;
-            reporter = reporter25;
-            reporterMultiplier = reporterMultiplier25;
+            priceFeed = priceFeed25;
+            priceFeedMultiplier = priceFeedMultiplier25;
         }
         if (i == 26) {
             underlying = underlying26;
@@ -1052,8 +1054,8 @@ contract UniswapConfig {
             priceSource = priceSource26;
             fixedPrice = fixedPrice26;
             uniswapMarket = uniswapMarket26;
-            reporter = reporter26;
-            reporterMultiplier = reporterMultiplier26;
+            priceFeed = priceFeed26;
+            priceFeedMultiplier = priceFeedMultiplier26;
         }
         if (i == 27) {
             underlying = underlying27;
@@ -1062,8 +1064,8 @@ contract UniswapConfig {
             priceSource = priceSource27;
             fixedPrice = fixedPrice27;
             uniswapMarket = uniswapMarket27;
-            reporter = reporter27;
-            reporterMultiplier = reporterMultiplier27;
+            priceFeed = priceFeed27;
+            priceFeedMultiplier = priceFeedMultiplier27;
         }
         if (i == 28) {
             underlying = underlying28;
@@ -1072,8 +1074,8 @@ contract UniswapConfig {
             priceSource = priceSource28;
             fixedPrice = fixedPrice28;
             uniswapMarket = uniswapMarket28;
-            reporter = reporter28;
-            reporterMultiplier = reporterMultiplier28;
+            priceFeed = priceFeed28;
+            priceFeedMultiplier = priceFeedMultiplier28;
         }
         if (i == 29) {
             underlying = underlying29;
@@ -1082,8 +1084,8 @@ contract UniswapConfig {
             priceSource = priceSource29;
             fixedPrice = fixedPrice29;
             uniswapMarket = uniswapMarket29;
-            reporter = reporter29;
-            reporterMultiplier = reporterMultiplier29;
+            priceFeed = priceFeed29;
+            priceFeedMultiplier = priceFeedMultiplier29;
         }
         if (i == 30) {
             underlying = underlying30;
@@ -1092,8 +1094,8 @@ contract UniswapConfig {
             priceSource = priceSource30;
             fixedPrice = fixedPrice30;
             uniswapMarket = uniswapMarket30;
-            reporter = reporter30;
-            reporterMultiplier = reporterMultiplier30;
+            priceFeed = priceFeed30;
+            priceFeedMultiplier = priceFeedMultiplier30;
         }
         if (i == 31) {
             underlying = underlying31;
@@ -1102,8 +1104,8 @@ contract UniswapConfig {
             priceSource = priceSource31;
             fixedPrice = fixedPrice31;
             uniswapMarket = uniswapMarket31;
-            reporter = reporter31;
-            reporterMultiplier = reporterMultiplier31;
+            priceFeed = priceFeed31;
+            priceFeedMultiplier = priceFeedMultiplier31;
         }
         if (i == 32) {
             underlying = underlying32;
@@ -1112,8 +1114,8 @@ contract UniswapConfig {
             priceSource = priceSource32;
             fixedPrice = fixedPrice32;
             uniswapMarket = uniswapMarket32;
-            reporter = reporter32;
-            reporterMultiplier = reporterMultiplier32;
+            priceFeed = priceFeed32;
+            priceFeedMultiplier = priceFeedMultiplier32;
         }
         if (i == 33) {
             underlying = underlying33;
@@ -1122,8 +1124,8 @@ contract UniswapConfig {
             priceSource = priceSource33;
             fixedPrice = fixedPrice33;
             uniswapMarket = uniswapMarket33;
-            reporter = reporter33;
-            reporterMultiplier = reporterMultiplier33;
+            priceFeed = priceFeed33;
+            priceFeedMultiplier = priceFeedMultiplier33;
         }
         if (i == 34) {
             underlying = underlying34;
@@ -1132,8 +1134,8 @@ contract UniswapConfig {
             priceSource = priceSource34;
             fixedPrice = fixedPrice34;
             uniswapMarket = uniswapMarket34;
-            reporter = reporter34;
-            reporterMultiplier = reporterMultiplier34;
+            priceFeed = priceFeed34;
+            priceFeedMultiplier = priceFeedMultiplier34;
         }
 
         return TokenConfig({
@@ -1143,8 +1145,8 @@ contract UniswapConfig {
             priceSource: priceSource,
             fixedPrice: fixedPrice,
             uniswapMarket: uniswapMarket,
-            reporter: reporter,
-            reporterMultiplier: reporterMultiplier,
+            priceFeed: priceFeed,
+            priceFeedMultiplier: priceFeedMultiplier,
             isUniswapReversed:
                 ((isUniswapReversed >> i) & uint256(1)) == 1 ? true : false
         });
@@ -1160,12 +1162,12 @@ contract UniswapConfig {
     }
 
     /**
-     * @notice Get the config for the reporter
-     * @param reporter The address of the reporter of the config to get
+     * @notice Get the config for the priceFeed
+     * @param priceFeed The address of the priceFeed of the config to get
      * @return The config object
      */
-    function getTokenConfigByReporter(address reporter) public view returns (TokenConfig memory) {
-        uint index = getReporterIndex(reporter);
+    function getTokenConfigByPriceFeed(AggregatorInterface priceFeed) public view returns (TokenConfig memory) {
+        uint index = getPriceFeedIndex(priceFeed);
         if (index != type(uint).max) {
             return getTokenConfig(index);
         }
