@@ -2,17 +2,12 @@
 
 pragma solidity =0.8.7;
 
-import "./UniswapConfig.sol";
+import "./UAVConfig.sol";
 import "./UniswapLib.sol";
-import "../Ownable.sol";
 import "../Chainlink/AggregatorValidatorInterface.sol";
+import "../Chainlink/AggregatorV2V3Interface.sol";
 
-struct PriceData {
-    uint248 price;
-    bool failoverActive;
-}
-
-contract UniswapAnchoredView is AggregatorValidatorInterface, UniswapConfig, Ownable {
+contract UniswapAnchoredView is UAVConfig {
     /// @notice The number of wei in 1 ETH
     uint public constant ethBaseUnit = 1e18;
 
@@ -28,55 +23,22 @@ contract UniswapAnchoredView is AggregatorValidatorInterface, UniswapConfig, Own
     /// @notice The minimum amount of time in seconds required for the old uniswap price accumulator to be replaced
     uint32 public immutable anchorPeriod;
 
-    /// @notice Official prices by symbol hash
-    mapping(bytes32 => PriceData) public prices;
-
-    /// @notice The event emitted when new prices are posted but the stored price is not updated due to the anchor
-    event PriceGuarded(bytes32 indexed symbolHash, uint reporter, uint anchor);
-
-    /// @notice The event emitted when the stored price is updated
-    event PriceUpdated(bytes32 indexed symbolHash, uint price);
-
-    /// @notice The event emitted when failover is activated
-    event FailoverActivated(bytes32 indexed symbolHash);
-
-    /// @notice The event emitted when failover is deactivated
-    event FailoverDeactivated(bytes32 indexed symbolHash);
-
     bytes32 constant ethHash = keccak256(abi.encodePacked("ETH"));
 
     /**
      * @notice Construct a uniswap anchored view for a set of token configurations
      * @dev Note that to avoid immature TWAPs, the system must run for at least a single anchorPeriod before using.
-     *      NOTE: Reported prices are set to 1 during construction. We assume that this contract will not be voted in by
-     *      governance until prices have been updated through `validate` for each TokenConfig.
-     * @param anchorToleranceMantissa_ The percentage tolerance that the reporter may deviate from the uniswap anchor
+     *  TODO: Add note here about Uniswap V3 observation cardinality requirements/considerations
+     * @param anchorToleranceMantissa_ The percentage tolerance that the feed may deviate from the uniswap anchor
      * @param anchorPeriod_ The minimum amount of time required for the old uniswap price accumulator to be replaced
-     * @param configs The static token configurations which define what prices are supported and how
      */
     constructor(uint anchorToleranceMantissa_,
-                uint32 anchorPeriod_,
-                TokenConfig[] memory configs) UniswapConfig(configs) {
+                uint32 anchorPeriod_) UAVConfig() {
         anchorPeriod = anchorPeriod_;
 
         // Allow the tolerance to be whatever the deployer chooses, but prevent under/overflow (and prices from being 0)
         upperBoundAnchorRatio = anchorToleranceMantissa_ > type(uint).max - 100e16 ? type(uint).max : 100e16 + anchorToleranceMantissa_;
         lowerBoundAnchorRatio = anchorToleranceMantissa_ < 100e16 ? 100e16 - anchorToleranceMantissa_ : 1;
-
-        for (uint i = 0; i < configs.length; i++) {
-            TokenConfig memory config = configs[i];
-            require(config.baseUnit > 0, "baseUnit must be greater than zero");
-            address uniswapMarket = config.uniswapMarket;
-            if (config.priceSource == PriceSource.REPORTER) {
-                require(uniswapMarket != address(0), "reported prices must have an anchor");
-                require(config.reporter != address(0), "reported price must have a reporter");
-                bytes32 symbolHash = config.symbolHash;
-                prices[symbolHash].price = 1;
-            } else {
-                require(uniswapMarket == address(0), "only reported prices utilize an anchor");
-                require(config.reporter == address(0), "only reported prices utilize a reporter");
-            }
-        }
     }
 
     /**
@@ -90,12 +52,24 @@ contract UniswapAnchoredView is AggregatorValidatorInterface, UniswapConfig, Own
     }
 
     function priceInternal(TokenConfig memory config) internal view returns (uint) {
-        if (config.priceSource == PriceSource.REPORTER) {
-            return prices[config.symbolHash].price;
+        if (config.priceSource == PriceSource.FEED) {
+            // Fetch latest price from the feed
+            AggregatorV2V3Interface feed = AggregatorV2V3Interface(config.feed);
+            uint256 feedPrice = convertFeedPrice(config, feed.latestAnswer());
+            uint256 anchorPrice = calculateAnchorPriceFromEthPrice(config);
+
+            // TODO: Indicate if using failed over / anchor price over feed price?
+            if (!config.failoverActive && isWithinAnchor(feedPrice, anchorPrice)) {
+                return feedPrice;
+            } else {
+                return anchorPrice;
+            }
         } else if (config.priceSource == PriceSource.FIXED_USD) {
             return config.fixedPrice;
         } else { // config.priceSource == PriceSource.FIXED_ETH
-            uint usdPerEth = prices[ethHash].price;
+            TokenConfig memory ethConfig = getTokenConfigBySymbolHash(ethHash);
+            AggregatorV2V3Interface feed = AggregatorV2V3Interface(ethConfig.feed);
+            uint usdPerEth = convertFeedPrice(config, feed.latestAnswer());
             require(usdPerEth > 0, "ETH price not set, cannot convert to dollars");
             return FullMath.mulDiv(usdPerEth, config.fixedPrice, ethBaseUnit);
         }
@@ -117,60 +91,12 @@ contract UniswapAnchoredView is AggregatorValidatorInterface, UniswapConfig, Own
     }
 
     /**
-     * @notice This is called by the reporter whenever a new price is posted on-chain
-     * @dev called by AccessControlledOffchainAggregator
-     * @param currentAnswer the price
-     * @return valid bool
-     */
-    function validate(uint256/* previousRoundId */,
-            int256 /* previousAnswer */,
-            uint256 /* currentRoundId */,
-            int256 currentAnswer) external override returns (bool valid) {
-
-        // NOTE: We don't do any access control on msg.sender here. The access control is done in getTokenConfigByReporter,
-        // which will REVERT if an unauthorized address is passed.
-        TokenConfig memory config = getTokenConfigByReporter(msg.sender);
-        uint256 reportedPrice = convertReportedPrice(config, currentAnswer);
-        uint256 anchorPrice = calculateAnchorPriceFromEthPrice(config);
-
-        PriceData memory priceData = prices[config.symbolHash];
-        if (priceData.failoverActive) {
-            require(anchorPrice < 2**248, "Anchor price too large");
-            prices[config.symbolHash].price = uint248(anchorPrice);
-            emit PriceUpdated(config.symbolHash, anchorPrice);
-        } else if (isWithinAnchor(reportedPrice, anchorPrice)) {
-            require(reportedPrice < 2**248, "Reported price too large");
-            prices[config.symbolHash].price = uint248(reportedPrice);
-            emit PriceUpdated(config.symbolHash, reportedPrice);
-            valid = true;
-        } else {
-            emit PriceGuarded(config.symbolHash, reportedPrice, anchorPrice);
-        }
-    }
-
-    /**
-     * @notice In the event that a feed is failed over to Uniswap TWAP, this function can be called
-     * by anyone to update the TWAP price.
-     * @dev This only works if the feed represented by the symbolHash is failed over, and will revert otherwise
-     * @param symbolHash bytes32
-     */
-    function pokeFailedOverPrice(bytes32 symbolHash) public {
-        PriceData memory priceData = prices[symbolHash];
-        require(priceData.failoverActive, "Failover must be active");
-        TokenConfig memory config = getTokenConfigBySymbolHash(symbolHash);
-        uint anchorPrice = calculateAnchorPriceFromEthPrice(config);
-        require(anchorPrice < 2**248, "Anchor price too large");
-        prices[config.symbolHash].price = uint248(anchorPrice);
-        emit PriceUpdated(config.symbolHash, anchorPrice);
-    }
-
-    /**
      * @notice Calculate the anchor price by fetching price data from the TWAP
      * @param config TokenConfig
      * @return anchorPrice uint
      */
     function calculateAnchorPriceFromEthPrice(TokenConfig memory config) internal view returns (uint anchorPrice) {
-        require(config.priceSource == PriceSource.REPORTER, "only reporter prices get posted");
+        require(config.priceSource == PriceSource.FEED, "only feed prices are anchored");
         uint ethPrice = fetchEthPrice();
         if (config.symbolHash == ethHash) {
             anchorPrice = ethPrice;
@@ -182,20 +108,20 @@ contract UniswapAnchoredView is AggregatorValidatorInterface, UniswapConfig, Own
     /**
      * @notice Convert the reported price to the 6 decimal format that this view requires
      * @param config TokenConfig
-     * @param reportedPrice from the reporter
+     * @param feedPrice price from the feed
      * @return convertedPrice uint256
      */
-    function convertReportedPrice(TokenConfig memory config, int256 reportedPrice) internal pure returns (uint256) {
-        require(reportedPrice >= 0, "Reported price cannot be negative");
-        uint256 unsignedPrice = uint256(reportedPrice);
-        uint256 convertedPrice = FullMath.mulDiv(unsignedPrice, config.reporterMultiplier, config.baseUnit);
+    function convertFeedPrice(TokenConfig memory config, int256 feedPrice) internal pure returns (uint256) {
+        require(feedPrice >= 0, "Feed price cannot be negative");
+        uint256 unsignedPrice = uint256(feedPrice);
+        uint256 convertedPrice = FullMath.mulDiv(unsignedPrice, config.feedMultiplier, config.baseUnit);
         return convertedPrice;
     }
 
 
-    function isWithinAnchor(uint reporterPrice, uint anchorPrice) internal view returns (bool) {
-        if (reporterPrice > 0) {
-            uint anchorRatio = FullMath.mulDiv(anchorPrice, 100e16, reporterPrice);
+    function isWithinAnchor(uint feedPrice, uint anchorPrice) internal view returns (bool) {
+        if (feedPrice > 0) {
+            uint anchorRatio = FullMath.mulDiv(anchorPrice, 100e16, feedPrice);
             return anchorRatio <= upperBoundAnchorRatio && anchorRatio >= lowerBoundAnchorRatio;
         }
         return false;
@@ -275,26 +201,5 @@ contract UniswapAnchoredView is AggregatorValidatorInterface, UniswapConfig, Own
         uint anchorPrice = unscaledPriceMantissa * config.baseUnit / ethBaseUnit / expScale;
 
         return anchorPrice;
-    }
-
-    /**
-     * @notice Activate failover, and fall back to using failover directly.
-     * @dev Only the owner can call this function
-     */
-    function activateFailover(bytes32 symbolHash) external onlyOwner() {
-        require(!prices[symbolHash].failoverActive, "Already activated");
-        prices[symbolHash].failoverActive = true;
-        emit FailoverActivated(symbolHash);
-        pokeFailedOverPrice(symbolHash);
-    }
-
-    /**
-     * @notice Deactivate a previously activated failover
-     * @dev Only the owner can call this function
-     */
-    function deactivateFailover(bytes32 symbolHash) external onlyOwner() {
-        require(prices[symbolHash].failoverActive, "Already deactivated");
-        prices[symbolHash].failoverActive = false;
-        emit FailoverDeactivated(symbolHash);
     }
 }
