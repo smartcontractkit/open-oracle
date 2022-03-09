@@ -10,6 +10,8 @@ import {
 } from "../types";
 import * as UniswapV3Pool from "@uniswap/v3-core/artifacts/contracts/UniswapV3Pool.sol/UniswapV3Pool.json";
 import { SignerWithAddress } from "@nomiclabs/hardhat-ethers/signers";
+import { PriceSource } from "./utils/PriceSource";
+import { TokenConfig } from "./utils/TokenConfig";
 
 // Chai matchers for mocked contracts
 use(smock.matchers);
@@ -17,11 +19,6 @@ use(smock.matchers);
 export const BigNumber = ethers.BigNumber;
 export type BigNumber = ReturnType<typeof BigNumber.from>;
 
-const PriceSource = {
-  FIXED_ETH: 0,
-  FIXED_USD: 1,
-  FEED: 2,
-};
 const FIXED_ETH_AMOUNT = 0.005e18;
 
 interface CTokenConfig {
@@ -30,20 +27,6 @@ interface CTokenConfig {
     underlying: string;
     feed: MockV3Aggregator;
   };
-}
-
-// struct TokenConfig from UAVConfig.sol; not exported by Typechain
-interface TokenConfig {
-  underlying: string;
-  symbolHash: string;
-  baseUnit: BigNumber;
-  priceSource: number;
-  fixedPrice: BigNumber;
-  uniswapMarket: string;
-  feed: string;
-  feedMultiplier: BigNumber;
-  isUniswapReversed: boolean;
-  failoverActive: boolean;
 }
 
 interface SetupOptions {
@@ -101,9 +84,9 @@ async function setup({ isMockedView }: SetupOptions) {
           symbol,
           addr: fakeCToken.address,
           underlying: fakeErc20.address,
-          feed: await new MockV3Aggregator__factory(
-            deployer
-          ).deploy(100_000_000),
+          feed: await new MockV3Aggregator__factory(deployer).deploy(
+            100_000_000
+          ),
         };
       })
     )
@@ -200,7 +183,7 @@ async function setup({ isMockedView }: SetupOptions) {
       await smock.mock<UniswapAnchoredView__factory>("UniswapAnchoredView");
     uniswapAnchoredView = await mockedUniswapAnchoredView.deploy(
       anchorMantissa,
-      anchorPeriod,
+      anchorPeriod
     );
   } else {
     uniswapAnchoredView = await new UniswapAnchoredView__factory(
@@ -209,7 +192,13 @@ async function setup({ isMockedView }: SetupOptions) {
   }
 
   for (const tokenConfig of tokenConfigs) {
-    await uniswapAnchoredView.addTokenConfig(tokenConfig)
+    await uniswapAnchoredView.addTokenConfig(tokenConfig);
+  }
+
+  const cTokensToUpkeep = [cToken.ETH, cToken.WBTC]
+  for (const {addr} of cTokensToUpkeep) {
+    const encodedAddress = ethers.utils.defaultAbiCoder.encode(['address'], [addr])
+    await uniswapAnchoredView.performUpkeep(encodedAddress)
   }
 
   return {
@@ -301,170 +290,170 @@ describe("UniswapAnchoredView", () => {
     //   expect(updatedEthPriceData.price).to.equal(expectedPrice);
     // });
 
-  //   it("should update view if ERC20 price is within anchor bounds", async () => {
-  //     // Same as above test but for an ERC-20 / ETH pair (REPv2/ETH)
-  //     const repSymbol = keccak256("REPv2");
-  //     const price = BigNumber.from(28e8);
-  //     const expectedPrice = BigNumber.from(28e6);
-  //     reporter = cToken.REP.reporter;
-  //     // Try to report new price
-  //     const tx_ = await reporter.validate(price);
-  //     const tx = await tx_.wait(1);
+    //   it("should update view if ERC20 price is within anchor bounds", async () => {
+    //     // Same as above test but for an ERC-20 / ETH pair (REPv2/ETH)
+    //     const repSymbol = keccak256("REPv2");
+    //     const price = BigNumber.from(28e8);
+    //     const expectedPrice = BigNumber.from(28e6);
+    //     reporter = cToken.REP.reporter;
+    //     // Try to report new price
+    //     const tx_ = await reporter.validate(price);
+    //     const tx = await tx_.wait(1);
 
-  //     // Check event log and make sure the PriceUpdated event was emitted correctly
-  //     const events = await uniswapAnchoredView.queryFilter(
-  //       uniswapAnchoredView.filters.PriceUpdated(null, null),
-  //       tx.blockNumber,
-  //       tx.blockNumber
-  //     );
-  //     expect(events.length).to.equal(1);
-  //     expect(events[0].args.symbolHash).to.equal(repSymbol);
-  //     expect(events[0].args.price).to.equal(expectedPrice);
-  //     const updatedEthPriceData = await uniswapAnchoredView.prices(repSymbol);
-  //     expect(updatedEthPriceData.price).to.equal(expectedPrice);
-  //   });
+    //     // Check event log and make sure the PriceUpdated event was emitted correctly
+    //     const events = await uniswapAnchoredView.queryFilter(
+    //       uniswapAnchoredView.filters.PriceUpdated(null, null),
+    //       tx.blockNumber,
+    //       tx.blockNumber
+    //     );
+    //     expect(events.length).to.equal(1);
+    //     expect(events[0].args.symbolHash).to.equal(repSymbol);
+    //     expect(events[0].args.price).to.equal(expectedPrice);
+    //     const updatedEthPriceData = await uniswapAnchoredView.prices(repSymbol);
+    //     expect(updatedEthPriceData.price).to.equal(expectedPrice);
+    //   });
 
-  //   it("should not update view if ETH price is below anchor bounds", async () => {
-  //     const ethSymbol = keccak256("ETH");
-  //     const anchorPrice = 3950860042; // ~UniV3 ETH-USDC TWAP at block 13152450
-  //     // anchorMantissa is 1e17, so 10% tolerance - test with a value outside of this tolerance range
-  //     const postedPrice = 4400e8;
-  //     const convertedPostedPrice = 4400e6;
-  //     reporter = cToken.ETH.reporter;
-  //     // The internal price should be initialised with a value of 1
-  //     expect(await uniswapAnchoredView.price("ETH")).to.equal(1);
-  //     // Try to report new price
-  //     // This validates against the ETH-USDC UniV3 pool's TWAP at block 13152450
-  //     await reporter.validate(postedPrice);
-  //     expect(await uniswapAnchoredView.price("ETH")).to.equal(1);
+    //   it("should not update view if ETH price is below anchor bounds", async () => {
+    //     const ethSymbol = keccak256("ETH");
+    //     const anchorPrice = 3950860042; // ~UniV3 ETH-USDC TWAP at block 13152450
+    //     // anchorMantissa is 1e17, so 10% tolerance - test with a value outside of this tolerance range
+    //     const postedPrice = 4400e8;
+    //     const convertedPostedPrice = 4400e6;
+    //     reporter = cToken.ETH.reporter;
+    //     // The internal price should be initialised with a value of 1
+    //     expect(await uniswapAnchoredView.price("ETH")).to.equal(1);
+    //     // Try to report new price
+    //     // This validates against the ETH-USDC UniV3 pool's TWAP at block 13152450
+    //     await reporter.validate(postedPrice);
+    //     expect(await uniswapAnchoredView.price("ETH")).to.equal(1);
 
-  //     // Check event log and make sure the PriceGuarded event was emitted correctly
-  //     const events = await uniswapAnchoredView.queryFilter(
-  //       uniswapAnchoredView.filters.PriceGuarded(null, null)
-  //     );
-  //     expect(events.length).to.equal(1);
-  //     expect(events[0].args.symbolHash).to.equal(ethSymbol);
-  //     expect(events[0].args.reporter).to.equal(convertedPostedPrice);
-  //     expect(events[0].args.anchor).to.equal(anchorPrice);
-  //     const updatedPrice = await uniswapAnchoredView.price("ETH");
-  //     expect(updatedPrice).to.equal(1);
-  //   });
+    //     // Check event log and make sure the PriceGuarded event was emitted correctly
+    //     const events = await uniswapAnchoredView.queryFilter(
+    //       uniswapAnchoredView.filters.PriceGuarded(null, null)
+    //     );
+    //     expect(events.length).to.equal(1);
+    //     expect(events[0].args.symbolHash).to.equal(ethSymbol);
+    //     expect(events[0].args.reporter).to.equal(convertedPostedPrice);
+    //     expect(events[0].args.anchor).to.equal(anchorPrice);
+    //     const updatedPrice = await uniswapAnchoredView.price("ETH");
+    //     expect(updatedPrice).to.equal(1);
+    //   });
 
-  //   it("should not update view if ERC20 price is below anchor bounds", async () => {
-  //     const repSymbol = keccak256("REPv2");
-  //     const anchorPrice = 29578072;
-  //     const postedPrice = 33e8; // Outside of the anchor tolerance
-  //     const convertedPrice = 33e6;
-  //     reporter = cToken.REP.reporter;
+    //   it("should not update view if ERC20 price is below anchor bounds", async () => {
+    //     const repSymbol = keccak256("REPv2");
+    //     const anchorPrice = 29578072;
+    //     const postedPrice = 33e8; // Outside of the anchor tolerance
+    //     const convertedPrice = 33e6;
+    //     reporter = cToken.REP.reporter;
 
-  //     // The internal price should be initialised with a value of 1
-  //     expect(await uniswapAnchoredView.price("REPv2")).to.equal(1);
-  //     // Try to report new price
-  //     // This validates against the REPv2-USDC UniV3 pool's TWAP at block 13152450
-  //     await reporter.validate(postedPrice);
-  //     expect(await uniswapAnchoredView.price("REPv2")).to.equal(1);
+    //     // The internal price should be initialised with a value of 1
+    //     expect(await uniswapAnchoredView.price("REPv2")).to.equal(1);
+    //     // Try to report new price
+    //     // This validates against the REPv2-USDC UniV3 pool's TWAP at block 13152450
+    //     await reporter.validate(postedPrice);
+    //     expect(await uniswapAnchoredView.price("REPv2")).to.equal(1);
 
-  //     // Check event log and make sure the PriceGuarded event was emitted correctly
-  //     const events = await uniswapAnchoredView.queryFilter(
-  //       uniswapAnchoredView.filters.PriceGuarded(null, null)
-  //     );
-  //     expect(events.length).to.equal(1);
-  //     expect(events[0].args.symbolHash).to.equal(repSymbol);
-  //     expect(events[0].args.reporter).to.equal(convertedPrice);
-  //     expect(events[0].args.anchor).to.equal(anchorPrice);
-  //     const updatedPrice = await uniswapAnchoredView.price("REPv2");
-  //     expect(updatedPrice).to.equal(1);
-  //   });
+    //     // Check event log and make sure the PriceGuarded event was emitted correctly
+    //     const events = await uniswapAnchoredView.queryFilter(
+    //       uniswapAnchoredView.filters.PriceGuarded(null, null)
+    //     );
+    //     expect(events.length).to.equal(1);
+    //     expect(events[0].args.symbolHash).to.equal(repSymbol);
+    //     expect(events[0].args.reporter).to.equal(convertedPrice);
+    //     expect(events[0].args.anchor).to.equal(anchorPrice);
+    //     const updatedPrice = await uniswapAnchoredView.price("REPv2");
+    //     expect(updatedPrice).to.equal(1);
+    //   });
 
-  //   it("should not update view if ETH price is above anchor bounds", async () => {
-  //     const ethSymbol = keccak256("ETH");
-  //     const anchorPrice = 3950860042; // ~UniV3 ETH-USDC TWAP at block 13152450
-  //     // anchorMantissa is 1e17, so 10% tolerance - test with a value outside of this tolerance range
-  //     const postedPrice = 3550e8;
-  //     const convertedPostedPrice = 3550e6;
-  //     reporter = cToken.ETH.reporter;
-  //     // The internal price should be initialised with a value of 1
-  //     expect(await uniswapAnchoredView.price("ETH")).to.equal(1);
-  //     // Try to report new price
-  //     // This validates against the ETH-USDC UniV3 pool's TWAP at block 13152450
-  //     await reporter.validate(postedPrice);
-  //     expect(await uniswapAnchoredView.price("ETH")).to.equal(1);
+    //   it("should not update view if ETH price is above anchor bounds", async () => {
+    //     const ethSymbol = keccak256("ETH");
+    //     const anchorPrice = 3950860042; // ~UniV3 ETH-USDC TWAP at block 13152450
+    //     // anchorMantissa is 1e17, so 10% tolerance - test with a value outside of this tolerance range
+    //     const postedPrice = 3550e8;
+    //     const convertedPostedPrice = 3550e6;
+    //     reporter = cToken.ETH.reporter;
+    //     // The internal price should be initialised with a value of 1
+    //     expect(await uniswapAnchoredView.price("ETH")).to.equal(1);
+    //     // Try to report new price
+    //     // This validates against the ETH-USDC UniV3 pool's TWAP at block 13152450
+    //     await reporter.validate(postedPrice);
+    //     expect(await uniswapAnchoredView.price("ETH")).to.equal(1);
 
-  //     // Check event log and make sure the PriceGuarded event was emitted correctly
-  //     const events = await uniswapAnchoredView.queryFilter(
-  //       uniswapAnchoredView.filters.PriceGuarded(null, null)
-  //     );
-  //     expect(events.length).to.equal(1);
-  //     expect(events[0].args.symbolHash).to.equal(ethSymbol);
-  //     expect(events[0].args.reporter).to.equal(convertedPostedPrice);
-  //     expect(events[0].args.anchor).to.equal(anchorPrice);
-  //     const updatedPrice = await uniswapAnchoredView.price("ETH");
-  //     expect(updatedPrice).to.equal(1);
-  //   });
+    //     // Check event log and make sure the PriceGuarded event was emitted correctly
+    //     const events = await uniswapAnchoredView.queryFilter(
+    //       uniswapAnchoredView.filters.PriceGuarded(null, null)
+    //     );
+    //     expect(events.length).to.equal(1);
+    //     expect(events[0].args.symbolHash).to.equal(ethSymbol);
+    //     expect(events[0].args.reporter).to.equal(convertedPostedPrice);
+    //     expect(events[0].args.anchor).to.equal(anchorPrice);
+    //     const updatedPrice = await uniswapAnchoredView.price("ETH");
+    //     expect(updatedPrice).to.equal(1);
+    //   });
 
-  //   it("should not update view if ERC20 price is above anchor bounds", async () => {
-  //     const repSymbol = keccak256("REPv2");
-  //     const anchorPrice = 29578072;
-  //     const postedPrice = 26e8; // Outside of the anchor tolerance
-  //     const convertedPrice = 26e6;
-  //     reporter = cToken.REP.reporter;
+    //   it("should not update view if ERC20 price is above anchor bounds", async () => {
+    //     const repSymbol = keccak256("REPv2");
+    //     const anchorPrice = 29578072;
+    //     const postedPrice = 26e8; // Outside of the anchor tolerance
+    //     const convertedPrice = 26e6;
+    //     reporter = cToken.REP.reporter;
 
-  //     // The internal price should be initialised with a value of 1
-  //     expect(await uniswapAnchoredView.price("REPv2")).to.equal(1);
-  //     // Try to report new price
-  //     // This validates against the REPv2-USDC UniV3 pool's TWAP at block 13152450
-  //     await reporter.validate(postedPrice);
-  //     expect(await uniswapAnchoredView.price("REPv2")).to.equal(1);
+    //     // The internal price should be initialised with a value of 1
+    //     expect(await uniswapAnchoredView.price("REPv2")).to.equal(1);
+    //     // Try to report new price
+    //     // This validates against the REPv2-USDC UniV3 pool's TWAP at block 13152450
+    //     await reporter.validate(postedPrice);
+    //     expect(await uniswapAnchoredView.price("REPv2")).to.equal(1);
 
-  //     // Check event log and make sure the PriceGuarded event was emitted correctly
-  //     const events = await uniswapAnchoredView.queryFilter(
-  //       uniswapAnchoredView.filters.PriceGuarded(null, null)
-  //     );
-  //     expect(events.length).to.equal(1);
-  //     expect(events[0].args.symbolHash).to.equal(repSymbol);
-  //     expect(events[0].args.reporter).to.equal(convertedPrice);
-  //     expect(events[0].args.anchor).to.equal(anchorPrice);
-  //     const updatedPrice = await uniswapAnchoredView.price("REPv2");
-  //     expect(updatedPrice).to.equal(1);
-  //   });
+    //     // Check event log and make sure the PriceGuarded event was emitted correctly
+    //     const events = await uniswapAnchoredView.queryFilter(
+    //       uniswapAnchoredView.filters.PriceGuarded(null, null)
+    //     );
+    //     expect(events.length).to.equal(1);
+    //     expect(events[0].args.symbolHash).to.equal(repSymbol);
+    //     expect(events[0].args.reporter).to.equal(convertedPrice);
+    //     expect(events[0].args.anchor).to.equal(anchorPrice);
+    //     const updatedPrice = await uniswapAnchoredView.price("REPv2");
+    //     expect(updatedPrice).to.equal(1);
+    //   });
 
-  //   it("should not update view if reported price is 0", async () => {
-  //     const ethSymbol = keccak256("ETH");
-  //     const anchorPrice = 3950860042; // ~UniV3 ETH-USDC TWAP at block 13152450
-  //     // anchorMantissa is 1e17, so 10% tolerance - test with a value outside of this tolerance range
-  //     const postedPrice = 0;
-  //     reporter = cToken.ETH.reporter;
-  //     // The internal price should be initialised with a value of 1
-  //     expect(await uniswapAnchoredView.price("ETH")).to.equal(1);
-  //     // Try to report new price
-  //     // This validates against the ETH-USDC UniV3 pool's TWAP at block 13152450
-  //     await reporter.validate(postedPrice);
-  //     expect(await uniswapAnchoredView.price("ETH")).to.equal(1);
+    //   it("should not update view if reported price is 0", async () => {
+    //     const ethSymbol = keccak256("ETH");
+    //     const anchorPrice = 3950860042; // ~UniV3 ETH-USDC TWAP at block 13152450
+    //     // anchorMantissa is 1e17, so 10% tolerance - test with a value outside of this tolerance range
+    //     const postedPrice = 0;
+    //     reporter = cToken.ETH.reporter;
+    //     // The internal price should be initialised with a value of 1
+    //     expect(await uniswapAnchoredView.price("ETH")).to.equal(1);
+    //     // Try to report new price
+    //     // This validates against the ETH-USDC UniV3 pool's TWAP at block 13152450
+    //     await reporter.validate(postedPrice);
+    //     expect(await uniswapAnchoredView.price("ETH")).to.equal(1);
 
-  //     // Check event log and make sure the PriceGuarded event was emitted correctly
-  //     const events = await uniswapAnchoredView.queryFilter(
-  //       uniswapAnchoredView.filters.PriceGuarded(null, null)
-  //     );
-  //     expect(events.length).to.equal(1);
-  //     expect(events[0].args.symbolHash).to.equal(ethSymbol);
-  //     expect(events[0].args.reporter).to.equal(postedPrice);
-  //     expect(events[0].args.anchor).to.equal(anchorPrice);
-  //     const updatedPrice = await uniswapAnchoredView.price("ETH");
-  //     expect(updatedPrice).to.equal(1);
-  //   });
+    //     // Check event log and make sure the PriceGuarded event was emitted correctly
+    //     const events = await uniswapAnchoredView.queryFilter(
+    //       uniswapAnchoredView.filters.PriceGuarded(null, null)
+    //     );
+    //     expect(events.length).to.equal(1);
+    //     expect(events[0].args.symbolHash).to.equal(ethSymbol);
+    //     expect(events[0].args.reporter).to.equal(postedPrice);
+    //     expect(events[0].args.anchor).to.equal(anchorPrice);
+    //     const updatedPrice = await uniswapAnchoredView.price("ETH");
+    //     expect(updatedPrice).to.equal(1);
+    //   });
 
-  //   it("should revert reporter is not associated with a token config", async () => {
-  //     const signers = await ethers.getSigners();
-  //     const deployer = signers[0];
-  //     reporter = await new MockChainlinkOCRAggregator__factory(
-  //       deployer
-  //     ).deploy();
-  //     await reporter.setUniswapAnchoredView(uniswapAnchoredView.address);
+    //   it("should revert reporter is not associated with a token config", async () => {
+    //     const signers = await ethers.getSigners();
+    //     const deployer = signers[0];
+    //     reporter = await new MockChainlinkOCRAggregator__factory(
+    //       deployer
+    //     ).deploy();
+    //     await reporter.setUniswapAnchoredView(uniswapAnchoredView.address);
 
-  //     await expect(reporter.validate(95)).to.be.revertedWith(
-  //       "token config not found"
-  //     );
-  //   });
+    //     await expect(reporter.validate(95)).to.be.revertedWith(
+    //       "token config not found"
+    //     );
+    //   });
   });
 
   describe.only("getUnderlyingPrice", () => {
@@ -558,7 +547,7 @@ describe("UniswapAnchoredView", () => {
       const anchorMantissa1 = exp(100, 16);
       const view1 = await new UniswapAnchoredView__factory(deployer).deploy(
         anchorMantissa1,
-        anchorPeriod,
+        anchorPeriod
       );
       expect(await view1.upperBoundAnchorRatio()).to.equal(exp(2, 18));
       expect(await view1.lowerBoundAnchorRatio()).to.equal(1);
@@ -566,7 +555,7 @@ describe("UniswapAnchoredView", () => {
       const anchorMantissa2 = UINT256_MAX.sub(exp(99, 16));
       const view2 = await new UniswapAnchoredView__factory(deployer).deploy(
         anchorMantissa2,
-        anchorPeriod,
+        anchorPeriod
       );
       expect(await view2.upperBoundAnchorRatio()).to.equal(UINT256_MAX);
       expect(await view2.lowerBoundAnchorRatio()).to.equal(1);

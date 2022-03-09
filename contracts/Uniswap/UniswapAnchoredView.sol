@@ -4,10 +4,16 @@ pragma solidity =0.8.7;
 
 import "./UAVConfig.sol";
 import "./UniswapLib.sol";
-import "../Chainlink/AggregatorValidatorInterface.sol";
 import "../Chainlink/AggregatorV2V3Interface.sol";
+import "../Chainlink/KeeperCompatibleInterface.sol";
+import "hardhat/console.sol";
 
-contract UniswapAnchoredView is UAVConfig {
+struct Observation {
+    uint256 price;
+    uint256 timestamp;
+}
+
+contract UniswapAnchoredView is UAVConfig, KeeperCompatibleInterface {
     /// @notice The number of wei in 1 ETH
     uint public constant ethBaseUnit = 1e18;
 
@@ -22,6 +28,12 @@ contract UniswapAnchoredView is UAVConfig {
 
     /// @notice The minimum amount of time in seconds required for the old uniswap price accumulator to be replaced
     uint32 public immutable anchorPeriod;
+
+    /// @notice The current observation for each symbolHash
+    mapping(bytes32 => Observation) public observations;
+
+    /// @notice The event emitted when the uniswap window changes
+    event UniswapWindowUpdated(bytes32 indexed symbolHash, uint oldTimestamp, uint newTimestamp, uint oldPrice, uint newPrice);
 
     bytes32 constant ethHash = keccak256(abi.encodePacked("ETH"));
 
@@ -56,7 +68,9 @@ contract UniswapAnchoredView is UAVConfig {
             // Fetch latest price from the feed
             AggregatorV2V3Interface feed = AggregatorV2V3Interface(config.feed);
             uint256 feedPrice = convertFeedPrice(config, feed.latestAnswer());
-            uint256 anchorPrice = calculateAnchorPriceFromEthPrice(config);
+            Observation memory observation = observations[config.symbolHash];
+            require(observation.timestamp != 0, "no observations recorded yet");
+            uint256 anchorPrice = observation.price;
 
             // TODO: Indicate if using failed over / anchor price over feed price?
             if (!config.failoverActive && isWithinAnchor(feedPrice, anchorPrice)) {
@@ -69,6 +83,7 @@ contract UniswapAnchoredView is UAVConfig {
         } else { // config.priceSource == PriceSource.FIXED_ETH
             TokenConfig memory ethConfig = getTokenConfigBySymbolHash(ethHash);
             AggregatorV2V3Interface feed = AggregatorV2V3Interface(ethConfig.feed);
+            // TODO: This only checks feed and not anchor
             uint usdPerEth = convertFeedPrice(config, feed.latestAnswer());
             require(usdPerEth > 0, "ETH price not set, cannot convert to dollars");
             return FullMath.mulDiv(usdPerEth, config.fixedPrice, ethBaseUnit);
@@ -88,6 +103,60 @@ contract UniswapAnchoredView is UAVConfig {
         // For example, the baseUnit of ETH is 1e18.
         // Since the prices in this view have 6 decimals, we must scale them by 1e(36 - 6)/baseUnit
         return FullMath.mulDiv(1e30, priceInternal(config), config.baseUnit);
+    }
+
+    function checkTwatpConfig(bytes calldata upkeepArgs)
+        internal
+        view
+        returns (TokenConfig memory, Observation memory, uint256, uint256)
+    {
+        (address cToken) = abi.decode(upkeepArgs, (address));
+        TokenConfig memory config = getTokenConfigByUnderlying(CErc20(cToken).underlying());
+        uint256 anchorPrice = calculateAnchorPriceFromEthPrice(config);
+        bytes32 symbolHash = config.symbolHash;
+        Observation memory currentObservation = observations[symbolHash];
+        // Update new and old observations if elapsed time is greater than or equal to anchor period
+        uint256 timeElapsed = block.timestamp - currentObservation.timestamp;
+        return (config, currentObservation, anchorPrice, timeElapsed);
+    }
+
+    function checkUpkeep(bytes calldata upkeepArgs)
+        external
+        view
+        virtual
+        override
+        returns (bool, bytes memory)
+    {
+        (, , , uint256 timeElapsed) = checkTwatpConfig(upkeepArgs);
+        return (timeElapsed >= anchorPeriod, bytes(""));
+    }
+
+    /**
+     * @notice This is intended to be called by a Keeper (but can be called by anyone) to update
+     *  the internally-stored UniV3 TWATP for a cToken underlying.
+     * @param upkeepArgs ABI-encoded (address cToken)
+     */
+    function performUpkeep(bytes calldata upkeepArgs) external override {
+        (
+            TokenConfig memory config,
+            Observation memory currentObservation,
+            uint256 anchorPrice,
+            uint256 timeElapsed
+        ) = checkTwatpConfig(upkeepArgs);
+
+        bytes32 symbolHash = config.symbolHash;
+        // Update observation if elapsed time is greater than or equal to anchor period
+        if (timeElapsed >= anchorPeriod) {
+            observations[symbolHash].timestamp = block.timestamp;
+            observations[symbolHash].price = anchorPrice;
+            emit UniswapWindowUpdated(
+                symbolHash,
+                currentObservation.timestamp,
+                block.timestamp,
+                currentObservation.price,
+                anchorPrice
+            );
+        }
     }
 
     /**
