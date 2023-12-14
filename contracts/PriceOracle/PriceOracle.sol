@@ -3,15 +3,14 @@ pragma solidity 0.8.7;
 
 import { Ownable2Step } from "@openzeppelin/contracts/access/Ownable2Step.sol";
 import { AggregatorV3Interface } from "@chainlink/contracts/src/v0.8/interfaces/AggregatorV3Interface.sol";
-import { FullMath } from "../Uniswap/UniswapLib.sol";
 
 contract PriceOracle is Ownable2Step {
 
     /// @dev Configuration used to return the USD price for the associated cToken asset and base unit needed for formatting
     /// There should be 1 TokenConfig object for each supported asset, passed in the constructor.
     struct TokenConfig {
-        // Number of smallest units of measurement in a single whole unit. (e.g. 1e18 for ETH)
-        uint256 baseUnit;
+        // Decimals of the underlying asset (e.g. 18 for ETH)
+        uint8 underlyingAssetDecimals;
         // Address of the Compound Token
         address cToken;
         // Address of the feed used to retrieve the asset's price
@@ -23,9 +22,9 @@ contract PriceOracle is Ownable2Step {
 
     /// @notice The event emitted when a new asset is added to the mapping
     /// @param cToken cToken address that the config was added for
-    /// @param baseUnit Number of smallest units of measurement in a single whole unit for the underlying cToken asset.
+    /// @param underlyingAssetDecimals Decimals of the underlying asset
     /// @param priceFeed Address of the feed used to retrieve the asset's price
-    event PriceOracleAssetAdded(address indexed cToken, uint256 baseUnit, address priceFeed);
+    event PriceOracleAssetAdded(address indexed cToken, uint256 underlyingAssetDecimals, address priceFeed);
 
     /// @notice The event emitted when the price feed for an existing config is updated
     /// @param cToken cToken address that the config was added for
@@ -35,9 +34,9 @@ contract PriceOracle is Ownable2Step {
 
     /// @notice The event emitted when an asset is removed to the mapping
     /// @param cToken cToken address that the config was removed for
-    /// @param baseUnit Number of smallest units of measurement in a single whole unit set in the removed config.
+    /// @param underlyingAssetDecimals Decimals of the underlying asset in the removed config.
     /// @param priceFeed Address price feed set in the removed config
-    event PriceOracleAssetRemoved(address indexed cToken, uint256 baseUnit, address priceFeed);
+    event PriceOracleAssetRemoved(address indexed cToken, uint256 underlyingAssetDecimals, address priceFeed);
 
     /// @notice The max decimals value allowed for price feed
     uint8 internal constant MAX_DECIMALS = 72;
@@ -45,11 +44,13 @@ contract PriceOracle is Ownable2Step {
     /// @notice The number of digits the price is scaled to before adjusted by the base units
     uint8 internal constant PRICE_SCALE = 36;
 
+    uint24 internal constant STALE_PRICE_DELAY_SECONDS = 87_000; // Staleness delay set to 24hrs + 10min buffer
+
     /// @notice cToken address for config not provided
     error MissingCTokenAddress();
 
-    /// @notice BaseUnit is missing or set to value 0
-    error InvalidBaseUnit();
+    /// @notice UnderlyingAssetDecimals is missing or set to value 0
+    error InvalidUnderlyingAssetDecimals();
 
     /// @notice Price feed missing or duplicated
     /// @param priceFeed Price feed address provided
@@ -62,14 +63,6 @@ contract PriceOracle is Ownable2Step {
     /// @notice Config does not exist in the mapping
     /// @param cToken cToken address provided
     error ConfigNotFound(address cToken);
-
-    /// @notice Decimals retrieved from the price feed is too large to use for formatting
-    /// @param decimals Decimals retrieve from the price feed
-    error DecimalsTooLarge(uint8 decimals);
-
-    /// @notice Price returned by the feed is negative
-    /// @param price Price returned from the price feed
-    error NegativePrice(int256 price);
 
     /// @notice Same price feed as the existing one was provided when updating the price feed config
     /// @param cToken cToken address that the price feed update is for
@@ -85,18 +78,17 @@ contract PriceOracle is Ownable2Step {
         // Populate token config mapping 
         for (uint i = 0; i < configs.length; i++) {
             TokenConfig memory config = configs[i];
-            validateTokenConfig(config);
-            tokenConfigs[config.cToken] = config;
+            addConfig(config);
         }
     }
 
     /**
      * @notice Get the underlying price of a cToken, in the format expected by the Comptroller.
-     * @dev Comptroller needs prices in the format: ${raw price} * 1e(36-decimals) / baseUnit
-     *      'baseUnit' is the number of smallest units of measurement in a single whole unit.
-     *      'decimals' is a value supplied by the price feed that represent the number of decimals the price feed reports with.
-     *      For example, the baseUnit of ETH is 1e18 and its price feed provides 8 decimal places
-     *      We must scale the price such as: ${raw price} * 1e(36 - 8) / 1e18.
+     * @dev Comptroller needs prices in the format: ${raw price} * 1e(36 - feedDecimals - underlyingAssetDecimals)
+     *      'underlyingAssetDecimals' is the decimals of the underlying asset for the corresponding cToken.
+     *      'feedDecimals' is a value supplied by the price feed that represent the number of decimals the price feed reports with.
+     *      For example, the underlyingAssetDecimals of ETH is 18 and its price feed provides 8 decimal places
+     *      We must scale the price such as: ${raw price} * 1e(36 - 8 - 18).
      * @param cToken The cToken address for price retrieval
      * @return Price denominated in USD for the given cToken address, in the format expected by the Comptroller.
      */
@@ -110,34 +102,36 @@ contract PriceOracle is Ownable2Step {
         // Initialize the aggregator to read the price from
         AggregatorV3Interface priceFeed = AggregatorV3Interface(config.priceFeed);
         // Retrieve decimals from feed for formatting
-        uint8 decimals = priceFeed.decimals();
-        // Fail safe check since this is an unrealistic scenario. The number of digits that the int256 answer can have naturally limits decimals
-        // but this protects against an erroneous uint8 values
-        if (decimals > MAX_DECIMALS) revert DecimalsTooLarge(decimals);
+        uint8 feedDecimals = priceFeed.decimals();
+        // Cap the sum of feed and underlying asset decimals at 72 to avoid overflows when formatting prices
+        // Unrealistic scenario but added as a fail safe
+        // Comptroller expects 0 price on error.
+        if (feedDecimals + config.underlyingAssetDecimals > MAX_DECIMALS) return 0;
         // Retrieve price from feed
         (
             /* uint80 roundID */,
             int256 answer,
-            /*uint startedAt*/,
-            /*uint timeStamp*/,
+            /*uint256 startedAt*/,
+            uint256 updatedAt,
             /*uint80 answeredInRound*/
         ) = priceFeed.latestRoundData();
-        if (answer < 0) revert NegativePrice(answer);
+        // Price considered stale since it has not been updated within the staleness window. Comptroller expects 0 price on error.
+        if (block.timestamp > updatedAt + STALE_PRICE_DELAY_SECONDS) return 0;
+        // Invalid price returned by feed. Comptroller expects 0 price on error.
+        if (answer <= 0) return 0;
         uint256 price = uint256(answer);
 
         // Number of decimals determines whether the price needs to be multiplied or divided for scaling
         // Handle the 2 scenarios separately to ensure a non-fractional scale value
-        if (decimals <= PRICE_SCALE) {
+        if (feedDecimals + config.underlyingAssetDecimals <= PRICE_SCALE) {
             // Decimals is always >=0 so the scale max value is 1e36 here and not at risk of overflowing
-            uint256 scale = 10 ** (PRICE_SCALE - decimals);
-            return FullMath.mulDiv(price, scale, config.baseUnit);
+            uint256 scale = 10 ** (PRICE_SCALE - feedDecimals - config.underlyingAssetDecimals);
+            return price * scale;
         } else {
-            // Decimals is capped at 72 by earlier validation so scale max value is 1e36 here and not at risk of overflowing
-            uint256 scale = 10 ** (decimals - PRICE_SCALE);
-            // Divide price by scale and base unit separately
-            // Multiplying scale and base unit before dividing price could result in an overflow
-            uint256 scaledPrice = FullMath.mulDiv(price, 1, scale);
-            return FullMath.mulDiv(scaledPrice, 1, config.baseUnit);
+            // Sum of feed and underlying asset decimals is capped at 72 by earlier validation so scale max value is 1e36 here
+            // and not at risk of overflowing
+            uint256 scale = 10 ** (feedDecimals + config.underlyingAssetDecimals - PRICE_SCALE);
+            return price / scale;
         }
     }
 
@@ -156,10 +150,10 @@ contract PriceOracle is Ownable2Step {
      * @notice Adds a new token config to enable the contract to provide prices for a new asset
      * @param config Token config struct that contains the info for a new asset configuration
      */
-    function addConfig(TokenConfig calldata config) external onlyOwner {
+    function addConfig(TokenConfig memory config) public onlyOwner {
         validateTokenConfig(config);
         tokenConfigs[config.cToken] = config;
-        emit PriceOracleAssetAdded(config.cToken, config.baseUnit, config.priceFeed);
+        emit PriceOracleAssetAdded(config.cToken, config.underlyingAssetDecimals, config.priceFeed);
     }
 
     /**
@@ -191,7 +185,7 @@ contract PriceOracle is Ownable2Step {
         if (config.cToken == address(0)) revert ConfigNotFound(cToken);
 
         delete tokenConfigs[cToken];
-        emit PriceOracleAssetRemoved(cToken, config.baseUnit, config.priceFeed);
+        emit PriceOracleAssetRemoved(cToken, config.underlyingAssetDecimals, config.priceFeed);
     }
 
     /**
@@ -202,7 +196,7 @@ contract PriceOracle is Ownable2Step {
     function validateTokenConfig(TokenConfig memory config) internal view {
         if (config.cToken == address(0)) revert MissingCTokenAddress();
         // Dual check of field being present and being non-zero
-        if (config.baseUnit == 0) revert InvalidBaseUnit();
+        if (config.underlyingAssetDecimals <= 0 || config.underlyingAssetDecimals > MAX_DECIMALS) revert InvalidUnderlyingAssetDecimals();
         if (config.priceFeed == address(0)) revert InvalidPriceFeed(config.priceFeed);
         // Check if duplicate configs were submitted for the same cToken
         if (tokenConfigs[config.cToken].cToken != address(0)) revert DuplicateConfig(config.cToken);

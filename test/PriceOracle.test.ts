@@ -5,6 +5,9 @@ import { exp, resetFork } from "./utils";
 import { PriceOracle, PriceOracle__factory } from "../types";
 import { SignerWithAddress } from "@nomiclabs/hardhat-ethers/signers";
 import { deployMockContract } from "ethereum-waffle";
+import parameters, {
+  TokenConfig,
+} from "../configuration/parameters-price-oracle";
 
 // Chai matchers for mocked contracts
 use(smock.matchers);
@@ -39,28 +42,69 @@ const mockAggregatorAbi = [
   },
 ];
 
-const configs = [
-  {
-    cToken: "0x4Ddc2D193948926D02f9B1fE9e1daa0718270ED5",
-    baseUnit: "1000000000000000000",
-    priceFeed: "", // Set in setup with mocked contract address
+const testConfigMap: Record<
+  string,
+  { mockPrice: number; feedDecimals: number; updatedAt: number }
+> = {
+  "0x4Ddc2D193948926D02f9B1fE9e1daa0718270ED5": {
+    mockPrice: 181217576125,
+    feedDecimals: 8,
+    updatedAt: 1630668214,
   },
-];
+  "0x39AA39c021dfbaE8faC545936693aC917d5E7563": {
+    mockPrice: 101000000,
+    feedDecimals: 8,
+    updatedAt: 1630668214,
+  },
+  "0x5d3a536E4D6DbD6114cc1Ead35777bAB948E3643": {
+    mockPrice: 99000000,
+    feedDecimals: 75,
+    updatedAt: 1630668214,
+  },
+  "0xf650C3d88D12dB855b8bf7D11Be6C55A4e07dCC9": {
+    mockPrice: 99800000,
+    feedDecimals: 8,
+    updatedAt: 0,
+  },
+  "0xccf4429db6322d5c611ee964527d42e5d685dd6a": {
+    mockPrice: -1,
+    feedDecimals: 8,
+    updatedAt: 1630668214,
+  },
+  "0x6C8c6b02E7b2BE14d4fA6022Dfd6d75921D90E4E": {
+    mockPrice: 1250000000000000,
+    feedDecimals: 26,
+    updatedAt: 1630668214,
+  },
+};
 
 async function setup({ isMockedView }: SetupOptions) {
+  let configs: TokenConfig[] = [];
   const signers = await ethers.getSigners();
   const deployer = signers[0];
   const newOwner = signers[1];
   const other = signers[2];
 
-  // Mock ETH aggregator and set in config
-  const mockedEthAggregator = await deployMockContract(
-    deployer,
-    mockAggregatorAbi
-  );
-  mockedEthAggregator.mock.latestRoundData.returns(0, 181217576125, 0, 0, 0);
-  mockedEthAggregator.mock.decimals.returns(8);
-  configs[0].priceFeed = mockedEthAggregator.address;
+  for (let config of parameters) {
+    if (testConfigMap[config.cToken]) {
+      // Mock ETH aggregator and set in config
+      const mockedEthAggregator = await deployMockContract(
+        deployer,
+        mockAggregatorAbi
+      );
+      const testConfig = testConfigMap[config.cToken];
+      mockedEthAggregator.mock.latestRoundData.returns(
+        0,
+        testConfig.mockPrice,
+        0,
+        testConfig.updatedAt,
+        0
+      );
+      mockedEthAggregator.mock.decimals.returns(testConfig.feedDecimals);
+      config.priceFeed = mockedEthAggregator.address;
+      configs.push(config);
+    }
+  }
 
   let priceOracle: PriceOracle | MockContract<PriceOracle>;
   if (isMockedView) {
@@ -101,7 +145,7 @@ describe("PriceOracle", () => {
     describe("transferOwnership", () => {
       describe("when called by non owner", async () => {
         it("reverts", async () => {
-          expect(
+          await expect(
             priceOracle.connect(other).transferOwnership(newOwner.address)
           ).to.be.revertedWith("Ownable: caller is not the owner");
         });
@@ -123,9 +167,11 @@ describe("PriceOracle", () => {
         describe("when transferring to another address", () => {
           it("emit an event", async () => {
             expect(
-              priceOracle.connect(deployer).transferOwnership(newOwner.address)
+              await priceOracle
+                .connect(deployer)
+                .transferOwnership(newOwner.address)
             )
-              .to.emit(priceOracle, "OwnershipTransferRequested")
+              .to.emit(priceOracle, "OwnershipTransferStarted")
               .withArgs(deployer.address, newOwner.address);
           });
         });
@@ -139,7 +185,7 @@ describe("PriceOracle", () => {
 
       describe("when called by an address that is not the new owner", () => {
         it("reverts", async () => {
-          expect(
+          await expect(
             priceOracle.connect(other).acceptOwnership()
           ).to.be.revertedWith("Ownable2Step: caller is not the new owner");
         });
@@ -152,7 +198,7 @@ describe("PriceOracle", () => {
         });
 
         it("emits an event", async () => {
-          await expect(priceOracle.connect(newOwner).acceptOwnership())
+          expect(await priceOracle.connect(newOwner).acceptOwnership())
             .to.emit(priceOracle, "OwnershipTransferred")
             .withArgs(deployer.address, newOwner.address);
         });
@@ -169,18 +215,50 @@ describe("PriceOracle", () => {
       }));
     });
 
-    it("should return reported ETH price", async () => {
+    it("should return reported ETH price scaled up", async () => {
       const ethCToken = "0x4Ddc2D193948926D02f9B1fE9e1daa0718270ED5";
       const formattedPrice = BigNumber.from("181217576125").mul(exp(1, 10));
-      expect(await priceOracle.getUnderlyingPrice(ethCToken)).to.equal(
-        formattedPrice
+      expect(formattedPrice).to.equal(
+        await priceOracle.getUnderlyingPrice(ethCToken)
+      );
+    });
+    it("should return reported USDC price scaled up", async () => {
+      const usdcCToken = "0x39AA39c021dfbaE8faC545936693aC917d5E7563";
+      const formattedPrice = BigNumber.from("101000000").mul(exp(1, 22));
+      expect(formattedPrice).to.equal(
+        await priceOracle.getUnderlyingPrice(usdcCToken)
+      );
+    });
+    it("should return reported BAT price scaled down", async () => {
+      const batCToken = "0x6C8c6b02E7b2BE14d4fA6022Dfd6d75921D90E4E";
+      const formattedPrice = BigNumber.from("1250000000000000").div(exp(1, 8));
+      expect(formattedPrice).to.equal(
+        await priceOracle.getUnderlyingPrice(batCToken)
+      );
+    });
+    it("should return 0 price for invalid feeds decimal", async () => {
+      const daiCToken = "0x5d3a536E4D6DbD6114cc1Ead35777bAB948E3643";
+      expect(BigNumber.from("0")).to.equal(
+        await priceOracle.getUnderlyingPrice(daiCToken)
+      );
+    });
+    it("should return 0 price for stale price", async () => {
+      const usdtCToken = "0xf650C3d88D12dB855b8bf7D11Be6C55A4e07dCC9";
+      expect(BigNumber.from("0")).to.equal(
+        await priceOracle.getUnderlyingPrice(usdtCToken)
+      );
+    });
+    it("should return 0 price for invalid price from feed", async () => {
+      const wbtcCToken = "0xccf4429db6322d5c611ee964527d42e5d685dd6a";
+      expect(BigNumber.from("0")).to.equal(
+        await priceOracle.getUnderlyingPrice(wbtcCToken)
       );
     });
     it("should revert for missing config", async () => {
       const invalidCToken = "0xF5DCe57282A584D2746FaF1593d3121Fcac444dC";
-      expect(priceOracle.getUnderlyingPrice(invalidCToken)).to.be.revertedWith(
-        "ConfigNotFound"
-      );
+      await expect(
+        priceOracle.getUnderlyingPrice(invalidCToken)
+      ).to.be.revertedWith("ConfigNotFound");
     });
   });
   describe("addConfig", () => {
@@ -193,35 +271,50 @@ describe("PriceOracle", () => {
     });
 
     it("should return success", async () => {
-      const newConfig = {
-        cToken: "0x39AA39c021dfbaE8faC545936693aC917d5E7563",
-        baseUnit: "1000000",
-        priceFeed: "0x8fFfFfd4AfB6115b954Bd326cbe7B4BA576818f6",
+      const newConfig: TokenConfig = {
+        cToken: "0x944DD1c7ce133B75880CeE913d513f8C07312393",
+        underlyingAssetDecimals: "18",
+        priceFeed: "0x7bAC85A8a13A4BcD8abb3eB7d6b4d632c5a57676",
       };
       expect(await priceOracle.addConfig(newConfig))
         .to.emit(priceOracle, "PriceOracleAssetAdded")
-        .withArgs(newConfig.cToken, newConfig.baseUnit, newConfig.priceFeed);
+        .withArgs(
+          newConfig.cToken,
+          newConfig.underlyingAssetDecimals,
+          newConfig.priceFeed
+        );
     });
     it("should revert for duplicate config", async () => {
-      const dupeConfig = {
+      const dupeConfig: TokenConfig = {
         cToken: "0x4Ddc2D193948926D02f9B1fE9e1daa0718270ED5",
-        baseUnit: "1000000000000000000",
+        underlyingAssetDecimals: "18",
         priceFeed: "0x4Ddc2D193948926D02f9B1fE9e1daa0718270ED5",
       };
 
-      expect(priceOracle.addConfig(dupeConfig)).to.be.revertedWith(
+      await expect(priceOracle.addConfig(dupeConfig)).to.be.revertedWith(
         "DuplicateConfig"
       );
     });
-    it("should revert for invalid config", async () => {
-      const invalidConfig = {
-        cToken: "0x39AA39c021dfbaE8faC545936693aC917d5E7563",
-        baseUnit: "0",
-        priceFeed: "0x8fFfFfd4AfB6115b954Bd326cbe7B4BA576818f6",
+    it("should revert for 0 underlyingAssetDecimals in config", async () => {
+      const invalidConfig: TokenConfig = {
+        cToken: "0x041171993284df560249B57358F931D9eB7b925D",
+        underlyingAssetDecimals: "0",
+        priceFeed: "0x09023c0da49aaf8fc3fa3adf34c6a7016d38d5e3",
       };
 
-      expect(priceOracle.addConfig(invalidConfig)).to.be.revertedWith(
-        "InvalidBaseUnit"
+      await expect(priceOracle.addConfig(invalidConfig)).to.be.revertedWith(
+        "InvalidUnderlyingAssetDecimals"
+      );
+    });
+    it("should revert for underlyingAssetDecimals too high in config", async () => {
+      const invalidConfig: TokenConfig = {
+        cToken: "0x041171993284df560249B57358F931D9eB7b925D",
+        underlyingAssetDecimals: "255",
+        priceFeed: "0x09023c0da49aaf8fc3fa3adf34c6a7016d38d5e3",
+      };
+
+      await expect(priceOracle.addConfig(invalidConfig)).to.be.revertedWith(
+        "InvalidUnderlyingAssetDecimals"
       );
     });
   });
@@ -235,7 +328,7 @@ describe("PriceOracle", () => {
     });
 
     it("should return success", async () => {
-      const existingConfig = configs[0];
+      const existingConfig = parameters[0];
       const newPriceFeed = "0x8fFfFfd4AfB6115b954Bd326cbe7B4BA576818f6";
       expect(
         await priceOracle.updateConfigPriceFeed(
@@ -251,9 +344,9 @@ describe("PriceOracle", () => {
         );
     });
     it("should revert for resetting same price feed", async () => {
-      const existingConfig = configs[0];
+      const existingConfig = parameters[0];
 
-      expect(
+      await expect(
         priceOracle.updateConfigPriceFeed(
           existingConfig.cToken,
           existingConfig.priceFeed
@@ -279,12 +372,12 @@ describe("PriceOracle", () => {
     });
 
     it("should return success", async () => {
-      const existingConfig = configs[0];
+      const existingConfig = parameters[0];
       expect(await priceOracle.removeConfig(existingConfig.cToken))
         .to.emit(priceOracle, "PriceOracleAssetRemoved")
         .withArgs(
           existingConfig.cToken,
-          existingConfig.baseUnit,
+          existingConfig.underlyingAssetDecimals,
           existingConfig.priceFeed
         );
     });

@@ -46,7 +46,9 @@ task(
 task("transfer-ownership", "Transfer ownership of the UAV to the COMP multisig")
   .addParam("contract", "Deployed UAV address")
   .setAction(async (args, hre) => {
-    const Contract = await hre.ethers.getContractFactory("Ownable");
+    const Contract = await hre.ethers.getContractFactory(
+      "contracts/Ownable.sol:Ownable"
+    );
     const contract = Contract.attach(args.contract);
     await contract.transferOwnership(COMP_MULTISIG);
   });
