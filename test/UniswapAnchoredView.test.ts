@@ -203,7 +203,7 @@ describe("UniswapAnchoredView", () => {
         describe("when transferring to another address", () => {
           it("emit an event", async () => {
             expect(
-              uniswapAnchoredView
+              await uniswapAnchoredView
                 .connect(deployer)
                 .transferOwnership(newOwner.address)
             )
@@ -236,7 +236,7 @@ describe("UniswapAnchoredView", () => {
         });
 
         it("emits an event", async () => {
-          await expect(uniswapAnchoredView.connect(newOwner).acceptOwnership())
+          expect(await uniswapAnchoredView.connect(newOwner).acceptOwnership())
             .to.emit(uniswapAnchoredView, "OwnershipTransferred")
             .withArgs(deployer.address, newOwner.address);
         });
