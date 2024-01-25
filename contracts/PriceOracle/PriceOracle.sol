@@ -146,7 +146,7 @@ contract PriceOracle is Ownable2Step {
      * @param config Token config struct that contains the info for a new asset configuration
      */
     function addConfig(TokenConfig memory config) public onlyOwner {
-        validateTokenConfig(config);
+        _validateTokenConfig(config);
         tokenConfigs[config.cToken] = config;
         emit PriceOracleAssetAdded(config.cToken, config.underlyingAssetDecimals, config.priceFeed);
     }
@@ -165,7 +165,7 @@ contract PriceOracle is Ownable2Step {
         // Check if existing price feed is the same as the new one sent
         if (config.priceFeed == priceFeed) revert UnchangedPriceFeed(cToken, config.priceFeed, priceFeed);
         // Validate the decimals for the price feed since it could differ from the previous one
-        validateDecimals(priceFeed, config.underlyingAssetDecimals);
+        _validateDecimals(priceFeed, config.underlyingAssetDecimals);
 
         address existingPriceFeed = config.priceFeed;
         config.priceFeed = priceFeed;
@@ -190,12 +190,12 @@ contract PriceOracle is Ownable2Step {
      * @dev All fields are required
      * @param config TokenConfig struct that needs to be validated
      */
-    function validateTokenConfig(TokenConfig memory config) internal view {
+    function _validateTokenConfig(TokenConfig memory config) internal view {
         if (config.cToken == address(0)) revert MissingCTokenAddress();
         if (config.priceFeed == address(0)) revert InvalidPriceFeed(config.priceFeed);
         // Check if duplicate configs were submitted for the same cToken
         if (tokenConfigs[config.cToken].cToken != address(0)) revert DuplicateConfig(config.cToken);
-        validateDecimals(config.priceFeed, config.underlyingAssetDecimals);
+        _validateDecimals(config.priceFeed, config.underlyingAssetDecimals);
     }
 
     /**
@@ -203,9 +203,9 @@ contract PriceOracle is Ownable2Step {
      * @param priceFeed The price feed the decimals need to be validated for
      * @param underlyingAssetDecimals The underlying asset decimals set in the config
      */
-     function validateDecimals(address priceFeed, uint8 underlyingAssetDecimals) internal view {
+     function _validateDecimals(address priceFeed, uint8 underlyingAssetDecimals) internal view {
         // Check underlyingAssetDecimals exists and non-zero
-        if (underlyingAssetDecimals <= 0) revert InvalidUnderlyingAssetDecimals();
+        if (underlyingAssetDecimals == 0) revert InvalidUnderlyingAssetDecimals();
         AggregatorV3Interface aggregator = AggregatorV3Interface(priceFeed);
         // Retrieve decimals from feed for formatting
         uint8 feedDecimals = aggregator.decimals();
