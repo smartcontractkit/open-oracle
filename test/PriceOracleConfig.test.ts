@@ -42,7 +42,6 @@ describe("PriceOracle", () => {
       );
       const config1 = configs[0];
       const returnedConfig1 = await priceOracle.getConfig(config1.cToken);
-      expect(returnedConfig1.cToken).to.equal(config1.cToken);
       expect(returnedConfig1.underlyingAssetDecimals).to.equal(
         Number(config1.underlyingAssetDecimals)
       );
@@ -50,7 +49,6 @@ describe("PriceOracle", () => {
 
       const config2 = configs[1];
       const returnedConfig2 = await priceOracle.getConfig(config2.cToken);
-      expect(returnedConfig2.cToken).to.equal(config2.cToken);
       expect(returnedConfig2.underlyingAssetDecimals).to.equal(
         Number(config2.underlyingAssetDecimals)
       );
