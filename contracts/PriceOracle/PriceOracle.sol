@@ -157,7 +157,7 @@ contract PriceOracle is Ownable2Step {
      * @param priceFeed The address of the new price feed the config needs to be updated to
      */
     function updateConfigPriceFeed(address cToken, address priceFeed) external onlyOwner {
-        TokenConfig storage config = tokenConfigs[cToken];
+        TokenConfig memory config = tokenConfigs[cToken];
         // Check if config exists for cToken
         if (config.cToken == address(0)) revert ConfigNotFound(cToken);
         // Validate price feed
@@ -168,7 +168,7 @@ contract PriceOracle is Ownable2Step {
         _validateDecimals(priceFeed, config.underlyingAssetDecimals);
 
         address existingPriceFeed = config.priceFeed;
-        config.priceFeed = priceFeed;
+        tokenConfigs[cToken].priceFeed = priceFeed;
         emit PriceOracleAssetPriceFeedUpdated(cToken, existingPriceFeed, priceFeed);
     }
 
