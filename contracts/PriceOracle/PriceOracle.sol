@@ -7,8 +7,16 @@ import { AggregatorV3Interface } from "@chainlink/contracts/src/v0.8/interfaces/
 contract PriceOracle is Ownable2Step {
 
     /// @dev Configuration used to return the USD price for the associated cToken asset and base unit needed for formatting
-    /// There should be 1 TokenConfig object for each supported asset, passed in the constructor.
     struct TokenConfig {
+        // Decimals of the underlying asset (e.g. 18 for ETH)
+        uint8 underlyingAssetDecimals;
+        // Address of the feed used to retrieve the asset's price
+        address priceFeed;
+    }
+
+    /// @dev Type used to load the contract with configs during deployment
+    /// There should be 1 LoadConfig object for each supported asset, passed in the constructor.
+    struct LoadConfig {
         // Decimals of the underlying asset (e.g. 18 for ETH)
         uint8 underlyingAssetDecimals;
         // Address of the Compound Token
@@ -75,10 +83,10 @@ contract PriceOracle is Ownable2Step {
      * @notice Construct a Price Oracle contract for a set of token configurations
      * @param configs The token configurations that define which price feed and base unit to use for each asset
      */
-    constructor(TokenConfig[] memory configs) {
+    constructor(LoadConfig[] memory configs) {
         // Populate token config mapping 
         for (uint i = 0; i < configs.length; i++) {
-            TokenConfig memory config = configs[i];
+            LoadConfig memory config = configs[i];
             addConfig(config);
         }
     }
@@ -99,7 +107,7 @@ contract PriceOracle is Ownable2Step {
         returns (uint256)
     {
         TokenConfig memory config = tokenConfigs[cToken];
-        if (config.cToken == address(0)) revert ConfigNotFound(cToken);
+        if (config.priceFeed == address(0)) revert ConfigNotFound(cToken);
         // Initialize the aggregator to read the price from
         AggregatorV3Interface priceFeed = AggregatorV3Interface(config.priceFeed);
         // Retrieve decimals from feed for formatting
@@ -137,7 +145,7 @@ contract PriceOracle is Ownable2Step {
     function getConfig(address cToken) external view returns (TokenConfig memory) {
         TokenConfig memory config = tokenConfigs[cToken];
         // Check if config exists for cToken
-        if (config.cToken == address(0)) revert ConfigNotFound(cToken);
+        if (config.priceFeed == address(0)) revert ConfigNotFound(cToken);
         return config;
     }
 
@@ -145,9 +153,10 @@ contract PriceOracle is Ownable2Step {
      * @notice Adds a new token config to enable the contract to provide prices for a new asset
      * @param config Token config struct that contains the info for a new asset configuration
      */
-    function addConfig(TokenConfig memory config) public onlyOwner {
+    function addConfig(LoadConfig memory config) public onlyOwner {
         _validateTokenConfig(config);
-        tokenConfigs[config.cToken] = config;
+        TokenConfig memory tokenConfig = TokenConfig(config.underlyingAssetDecimals, config.priceFeed);
+        tokenConfigs[config.cToken] = tokenConfig;
         emit PriceOracleAssetAdded(config.cToken, config.underlyingAssetDecimals, config.priceFeed);
     }
 
@@ -159,7 +168,7 @@ contract PriceOracle is Ownable2Step {
     function updateConfigPriceFeed(address cToken, address priceFeed) external onlyOwner {
         TokenConfig memory config = tokenConfigs[cToken];
         // Check if config exists for cToken
-        if (config.cToken == address(0)) revert ConfigNotFound(cToken);
+        if (config.priceFeed == address(0)) revert ConfigNotFound(cToken);
         // Validate price feed
         if (priceFeed == address(0)) revert InvalidPriceFeed(priceFeed);
         // Check if existing price feed is the same as the new one sent
@@ -179,7 +188,7 @@ contract PriceOracle is Ownable2Step {
     function removeConfig(address cToken) external onlyOwner {
         TokenConfig memory config = tokenConfigs[cToken];
         // Check if config exists for cToken
-        if (config.cToken == address(0)) revert ConfigNotFound(cToken);
+        if (config.priceFeed == address(0)) revert ConfigNotFound(cToken);
 
         delete tokenConfigs[cToken];
         emit PriceOracleAssetRemoved(cToken, config.underlyingAssetDecimals, config.priceFeed);
@@ -190,11 +199,11 @@ contract PriceOracle is Ownable2Step {
      * @dev All fields are required
      * @param config TokenConfig struct that needs to be validated
      */
-    function _validateTokenConfig(TokenConfig memory config) internal view {
+    function _validateTokenConfig(LoadConfig memory config) internal view {
         if (config.cToken == address(0)) revert MissingCTokenAddress();
         if (config.priceFeed == address(0)) revert InvalidPriceFeed(config.priceFeed);
         // Check if duplicate configs were submitted for the same cToken
-        if (tokenConfigs[config.cToken].cToken != address(0)) revert DuplicateConfig(config.cToken);
+        if (tokenConfigs[config.cToken].priceFeed != address(0)) revert DuplicateConfig(config.cToken);
         _validateDecimals(config.priceFeed, config.underlyingAssetDecimals);
     }
 
