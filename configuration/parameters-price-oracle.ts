@@ -104,12 +104,6 @@ const parameters: TokenConfig[] = [
     underlyingAssetDecimals: "18",
     priceFeed: "0x09023c0da49aaf8fc3fa3adf34c6a7016d38d5e3",
   },
-  {
-    // "NAME": "MATIC",
-    cToken: "0x944dd1c7ce133b75880cee913d513f8c07312393",
-    underlyingAssetDecimals: "18",
-    priceFeed: "0x7bac85a8a13a4bcd8abb3eb7d6b4d632c5a57676",
-  },
 ];
 
 export default parameters;
