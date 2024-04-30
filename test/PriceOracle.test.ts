@@ -15,6 +15,8 @@ use(smock.matchers);
 export const BigNumber = ethers.BigNumber;
 export type BigNumber = ReturnType<typeof BigNumber.from>;
 
+const zeroAddress = "0x0000000000000000000000000000000000000000";
+
 interface SetupOptions {
   isMockedView: boolean;
 }
@@ -92,6 +94,8 @@ async function setup({ isMockedView }: SetupOptions) {
       );
       await mockedEthAggregator.mock.decimals.returns(testConfig.feedDecimals);
       config.priceFeed = mockedEthAggregator.address;
+      configs.push(config);
+    } else if (!BigNumber.from(config.fixedPrice).eq("0")) {
       configs.push(config);
     }
   }
@@ -224,6 +228,13 @@ describe("PriceOracle", () => {
         await priceOracle.getUnderlyingPrice(batCToken)
       );
     });
+    it("should return fixed price SAI as configured", async () => {
+      const saiCToken = "0xF5DCe57282A584D2746FaF1593d3121Fcac444dC";
+      const formattedPrice = BigNumber.from("16616092000000000000");
+      expect(formattedPrice).to.equal(
+        await priceOracle.getUnderlyingPrice(saiCToken)
+      );
+    });
     it("should return 0 price for invalid price from feed", async () => {
       const wbtcCToken = "0xccf4429db6322d5c611ee964527d42e5d685dd6a";
       expect(BigNumber.from("0")).to.equal(
@@ -231,7 +242,7 @@ describe("PriceOracle", () => {
       );
     });
     it("should revert for missing config", async () => {
-      const invalidCToken = "0xF5DCe57282A584D2746FaF1593d3121Fcac444dC";
+      const invalidCToken = "0x041171993284df560249B57358F931D9eB7b925D";
       await expect(
         priceOracle.getUnderlyingPrice(invalidCToken)
       ).to.be.revertedWith("ConfigNotFound");
@@ -244,7 +255,7 @@ describe("PriceOracle", () => {
       }));
     });
 
-    it("should return success", async () => {
+    it("should return success with price feed", async () => {
       const mockedEthAggregator = await deployMockContract(
         deployer,
         mockAggregatorAbi
@@ -254,24 +265,84 @@ describe("PriceOracle", () => {
         cToken: "0x944DD1c7ce133B75880CeE913d513f8C07312393",
         underlyingAssetDecimals: "18",
         priceFeed: mockedEthAggregator.address,
+        fixedPrice: "0",
       };
       expect(await priceOracle.addConfig(newConfig))
         .to.emit(priceOracle, "PriceOracleAssetAdded")
         .withArgs(
           newConfig.cToken,
           Number(newConfig.underlyingAssetDecimals),
-          newConfig.priceFeed
+          newConfig.priceFeed,
+          newConfig.fixedPrice
         );
     });
-    it("should revert for duplicate config", async () => {
+    it("should return success with fixed price", async () => {
+      const mockedEthAggregator = await deployMockContract(
+        deployer,
+        mockAggregatorAbi
+      );
+      await mockedEthAggregator.mock.decimals.returns(8);
+      const newConfig: TokenConfig = {
+        cToken: "0x944DD1c7ce133B75880CeE913d513f8C07312393",
+        underlyingAssetDecimals: "18",
+        priceFeed: zeroAddress,
+        fixedPrice: "1000000000000000000",
+      };
+      expect(await priceOracle.addConfig(newConfig))
+        .to.emit(priceOracle, "PriceOracleAssetAdded")
+        .withArgs(
+          newConfig.cToken,
+          Number(newConfig.underlyingAssetDecimals),
+          newConfig.priceFeed,
+          newConfig.fixedPrice
+        );
+    });
+    it("should revert for duplicate price feed config", async () => {
       const dupeConfig: TokenConfig = {
         cToken: "0x4Ddc2D193948926D02f9B1fE9e1daa0718270ED5",
         underlyingAssetDecimals: "18",
         priceFeed: "0x4Ddc2D193948926D02f9B1fE9e1daa0718270ED5",
+        fixedPrice: "0",
       };
 
       await expect(priceOracle.addConfig(dupeConfig)).to.be.revertedWith(
         "DuplicateConfig"
+      );
+    });
+    it("should revert for duplicate fixed price config", async () => {
+      const dupeConfig: TokenConfig = {
+        cToken: "0x4Ddc2D193948926D02f9B1fE9e1daa0718270ED5",
+        underlyingAssetDecimals: "18",
+        priceFeed: zeroAddress,
+        fixedPrice: "10000",
+      };
+
+      await expect(priceOracle.addConfig(dupeConfig)).to.be.revertedWith(
+        "DuplicateConfig"
+      );
+    });
+    it("should revert for missing price configs", async () => {
+      const dupeConfig: TokenConfig = {
+        cToken: "0x4Ddc2D193948926D02f9B1fE9e1daa0718270ED5",
+        underlyingAssetDecimals: "18",
+        priceFeed: zeroAddress,
+        fixedPrice: "0",
+      };
+
+      await expect(priceOracle.addConfig(dupeConfig)).to.be.revertedWith(
+        "MissingPriceConfigs"
+      );
+    });
+    it("should revert for both price feed and fixed price configs set", async () => {
+      const dupeConfig: TokenConfig = {
+        cToken: "0x4Ddc2D193948926D02f9B1fE9e1daa0718270ED5",
+        underlyingAssetDecimals: "18",
+        priceFeed: "0x4Ddc2D193948926D02f9B1fE9e1daa0718270ED5",
+        fixedPrice: "1000000000000000000",
+      };
+
+      await expect(priceOracle.addConfig(dupeConfig)).to.be.revertedWith(
+        "InvalidPriceConfigs"
       );
     });
     it("should revert for 0 underlyingAssetDecimals in config", async () => {
@@ -279,6 +350,7 @@ describe("PriceOracle", () => {
         cToken: "0x041171993284df560249B57358F931D9eB7b925D",
         underlyingAssetDecimals: "0",
         priceFeed: "0x09023c0da49aaf8fc3fa3adf34c6a7016d38d5e3",
+        fixedPrice: "0",
       };
 
       await expect(priceOracle.addConfig(invalidConfig)).to.be.revertedWith(
@@ -295,6 +367,7 @@ describe("PriceOracle", () => {
         cToken: "0x041171993284df560249B57358F931D9eB7b925D",
         underlyingAssetDecimals: "75",
         priceFeed: mockedEthAggregator.address,
+        fixedPrice: "0",
       };
 
       await expect(priceOracle.addConfig(invalidConfig)).to.be.revertedWith(
@@ -311,6 +384,7 @@ describe("PriceOracle", () => {
         cToken: "0x041171993284df560249B57358F931D9eB7b925D",
         underlyingAssetDecimals: "18",
         priceFeed: mockedEthAggregator.address,
+        fixedPrice: "0",
       };
 
       await expect(priceOracle.addConfig(invalidConfig)).to.be.revertedWith(
@@ -325,7 +399,7 @@ describe("PriceOracle", () => {
       }));
     });
 
-    it("should return success", async () => {
+    it("should return success updating existing price feed", async () => {
       const mockedEthAggregator = await deployMockContract(
         deployer,
         mockAggregatorAbi
@@ -343,8 +417,39 @@ describe("PriceOracle", () => {
         .withArgs(
           existingConfig.cToken,
           existingConfig.priceFeed,
-          newPriceFeed
+          newPriceFeed,
+          0
         );
+    });
+    it("should return success updating fixed price config to use price feed", async () => {
+      const mockedEthAggregator = await deployMockContract(
+        deployer,
+        mockAggregatorAbi
+      );
+      await mockedEthAggregator.mock.decimals.returns(8);
+      const existingConfig = {
+        cToken: "0xF5DCe57282A584D2746FaF1593d3121Fcac444dC",
+        priceFeed: "0x0000000000000000000000000000000000000000",
+        fixedPrice: "16616092000000000000",
+      };
+      const newPriceFeed = mockedEthAggregator.address;
+      expect(
+        await priceOracle.updateConfigPriceFeed(
+          existingConfig.cToken,
+          newPriceFeed
+        )
+      )
+        .to.emit(priceOracle, "PriceOracleAssetPriceFeedUpdated")
+        .withArgs(
+          existingConfig.cToken,
+          existingConfig.priceFeed,
+          newPriceFeed,
+          existingConfig.fixedPrice
+        );
+      let returnedConfig = await priceOracle.getConfig(existingConfig.cToken);
+      expect(returnedConfig.priceFeed).to.equal(newPriceFeed);
+      // Updating cToken config to use price feed should clear out fixed price
+      expect(returnedConfig.fixedPrice).to.equal(0);
     });
     it("should revert for resetting same price feed", async () => {
       const existingConfig = parameters[0];
@@ -357,12 +462,19 @@ describe("PriceOracle", () => {
       ).to.be.revertedWith("UnchangedPriceFeed");
     });
     it("should revert for missing config", async () => {
-      const missingCToken = "0xF5DCe57282A584D2746FaF1593d3121Fcac444dC";
+      const missingCToken = "0x041171993284df560249B57358F931D9eB7b925D";
       const priceFeed = "0x8fFfFfd4AfB6115b954Bd326cbe7B4BA576818f6";
 
       await expect(
         priceOracle.updateConfigPriceFeed(missingCToken, priceFeed)
       ).to.be.revertedWith("ConfigNotFound");
+    });
+    it("should revert for missing price feed", async () => {
+      const existingConfig = parameters[0];
+
+      await expect(
+        priceOracle.updateConfigPriceFeed(existingConfig.cToken, zeroAddress)
+      ).to.be.revertedWith("MissingPriceFeed");
     });
     it("should revert for feed decimals too high", async () => {
       const mockedEthAggregator = await deployMockContract(
@@ -376,6 +488,78 @@ describe("PriceOracle", () => {
       await expect(
         priceOracle.updateConfigPriceFeed(existingConfig.cToken, newPriceFeed)
       ).to.be.revertedWith("FormattingDecimalsTooHigh");
+    });
+  });
+  describe("updateConfigFixedPrice", () => {
+    beforeEach(async () => {
+      ({ priceOracle, deployer } = await setup({
+        isMockedView: false,
+      }));
+    });
+
+    const existingConfig = {
+      cToken: "0xF5DCe57282A584D2746FaF1593d3121Fcac444dC",
+      priceFeed: zeroAddress,
+      fixedPrice: "16616092000000000000",
+    };
+
+    it("should return success updating existing fixed price", async () => {
+      const fixedPrice = "2000000000000000000";
+      expect(
+        await priceOracle.updateConfigFixedPrice(
+          existingConfig.cToken,
+          fixedPrice
+        )
+      )
+        .to.emit(priceOracle, "PriceOracleAssetFixedPriceUpdated")
+        .withArgs(
+          existingConfig.cToken,
+          existingConfig.fixedPrice,
+          fixedPrice,
+          existingConfig.priceFeed
+        );
+    });
+    it("should return success updating price feed config to use fixed price", async () => {
+      const existingConfig = parameters[0];
+      const fixedPrice = "2000000000000000000";
+      expect(
+        await priceOracle.updateConfigFixedPrice(
+          existingConfig.cToken,
+          fixedPrice
+        )
+      )
+        .to.emit(priceOracle, "PriceOracleAssetFixedPriceUpdated")
+        .withArgs(
+          existingConfig.cToken,
+          existingConfig.fixedPrice,
+          fixedPrice,
+          existingConfig.priceFeed
+        );
+      let returnedConfig = await priceOracle.getConfig(existingConfig.cToken);
+      expect(returnedConfig.fixedPrice).to.equal(BigNumber.from(fixedPrice));
+      // Updating cToken config to use fixed price should clear out price feed
+      expect(returnedConfig.priceFeed).to.equal(zeroAddress);
+    });
+    it("should revert for resetting same fixed price", async () => {
+      await expect(
+        priceOracle.updateConfigFixedPrice(
+          existingConfig.cToken,
+          existingConfig.fixedPrice
+        )
+      ).to.be.revertedWith("UnchangedFixedPrice");
+    });
+    it("should revert for missing fixed price", async () => {
+      await expect(
+        priceOracle.updateConfigFixedPrice(existingConfig.cToken, 0)
+      ).to.be.revertedWith("MissingFixedPrice");
+    });
+    it("should revert for missing config", async () => {
+      const missingCToken = "0x041171993284df560249B57358F931D9eB7b925D";
+      const fixedPrice = "2000000000000000000";
+
+      await expect(
+        priceOracle.updateConfigFixedPrice(missingCToken, fixedPrice)
+      ).to.be.revertedWith("ConfigNotFound");
     });
   });
   describe("removeConfig", () => {
@@ -392,11 +576,12 @@ describe("PriceOracle", () => {
         .withArgs(
           existingConfig.cToken,
           Number(existingConfig.underlyingAssetDecimals),
-          existingConfig.priceFeed
+          existingConfig.priceFeed,
+          existingConfig.fixedPrice
         );
     });
     it("should revert for missing config", async () => {
-      const missingCToken = "0x39AA39c021dfbaE8faC545936693aC917d5E7563";
+      const missingCToken = "0x041171993284df560249B57358F931D9eB7b925D";
 
       expect(priceOracle.removeConfig(missingCToken)).to.be.revertedWith(
         "ConfigNotFound"

@@ -10,6 +10,8 @@ import { mockAggregatorAbi } from "./PriceOracle.test";
 
 use(smock.matchers);
 
+const zeroAddress = "0x0000000000000000000000000000000000000000";
+
 describe("PriceOracle", () => {
   let signers: SignerWithAddress[];
   let deployer: SignerWithAddress;
@@ -26,15 +28,25 @@ describe("PriceOracle", () => {
 
     it("succeeds", async () => {
       const configs: TokenConfig[] = [
+        // Price feed config
         {
           cToken: "0x4Ddc2D193948926D02f9B1fE9e1daa0718270ED5",
           underlyingAssetDecimals: "18",
           priceFeed: "0x5f4eC3Df9cbd43714FE2740f5E3616155c5b8419",
+          fixedPrice: "0",
         },
         {
           cToken: "0x5d3a536E4D6DbD6114cc1Ead35777bAB948E3643",
           underlyingAssetDecimals: "18",
           priceFeed: "0xAed0c38402a5d19df6E4c03F4E2DceD6e29c1ee9",
+          fixedPrice: "0",
+        },
+        // Fixed price config
+        {
+          cToken: "0xF5DCe57282A584D2746FaF1593d3121Fcac444dC",
+          underlyingAssetDecimals: "18",
+          priceFeed: zeroAddress,
+          fixedPrice: "16616092000000000000",
         },
       ];
       const priceOracle = await new PriceOracle__factory(deployer).deploy(
@@ -63,18 +75,27 @@ describe("PriceOracle", () => {
       const repeatConfigs: TokenConfig[] = [
         {
           cToken: "0x4Ddc2D193948926D02f9B1fE9e1daa0718270ED5",
-          underlyingAssetDecimals: "18",
-          priceFeed: "0x5f4eC3Df9cbd43714FE2740f5E3616155c5b8419",
+          underlyingAssetDecimals: "6",
+          priceFeed: zeroAddress,
+          fixedPrice: "1000000000000000000",
         },
         {
           cToken: "0x5d3a536E4D6DbD6114cc1Ead35777bAB948E3643",
           underlyingAssetDecimals: "18",
           priceFeed: "0xAed0c38402a5d19df6E4c03F4E2DceD6e29c1ee9",
+          fixedPrice: "0",
         },
         {
           cToken: "0x4Ddc2D193948926D02f9B1fE9e1daa0718270ED5",
+          underlyingAssetDecimals: "18",
+          priceFeed: "0x5f4eC3Df9cbd43714FE2740f5E3616155c5b8419",
+          fixedPrice: "0",
+        },
+        {
+          cToken: "0x5d3a536E4D6DbD6114cc1Ead35777bAB948E3643",
           underlyingAssetDecimals: "6",
-          priceFeed: "0x8fffffd4afb6115b954bd326cbe7b4ba576818f6",
+          priceFeed: zeroAddress,
+          fixedPrice: "1000000000000000000",
         },
       ];
       await expect(
@@ -84,9 +105,10 @@ describe("PriceOracle", () => {
     it("reverts if missing cToken", async () => {
       const invalidConfigs: TokenConfig[] = [
         {
-          cToken: "0x0000000000000000000000000000000000000000",
+          cToken: zeroAddress,
           underlyingAssetDecimals: "18",
           priceFeed: "0x5f4eC3Df9cbd43714FE2740f5E3616155c5b8419",
+          fixedPrice: "0",
         },
       ];
       await expect(
@@ -99,6 +121,7 @@ describe("PriceOracle", () => {
           cToken: "0x4Ddc2D193948926D02f9B1fE9e1daa0718270ED5",
           underlyingAssetDecimals: "0",
           priceFeed: "0x5f4eC3Df9cbd43714FE2740f5E3616155c5b8419",
+          fixedPrice: "0",
         },
       ];
       await expect(
@@ -116,23 +139,38 @@ describe("PriceOracle", () => {
           cToken: "0x4Ddc2D193948926D02f9B1fE9e1daa0718270ED5",
           underlyingAssetDecimals: "18",
           priceFeed: mockedEthAggregator.address,
+          fixedPrice: "0",
         },
       ];
       await expect(
         new PriceOracle__factory(deployer).deploy(invalidConfigs)
       ).to.be.revertedWith("FormattingDecimalsTooHigh");
     });
-    it("reverts if missing priceFeed", async () => {
+    it("reverts if missing both priceFeed and fixedPrice", async () => {
       const invalidConfigs: TokenConfig[] = [
         {
           cToken: "0x4Ddc2D193948926D02f9B1fE9e1daa0718270ED5",
           underlyingAssetDecimals: "18",
-          priceFeed: "0x0000000000000000000000000000000000000000",
+          priceFeed: zeroAddress,
+          fixedPrice: "0",
         },
       ];
       await expect(
         new PriceOracle__factory(deployer).deploy(invalidConfigs)
-      ).to.be.revertedWith("InvalidPriceFeed");
+      ).to.be.revertedWith("MissingPriceConfigs");
+    });
+    it("reverts if both priceFeed and fixedPrice are set", async () => {
+      const invalidConfigs: TokenConfig[] = [
+        {
+          cToken: "0x4Ddc2D193948926D02f9B1fE9e1daa0718270ED5",
+          underlyingAssetDecimals: "18",
+          priceFeed: "0x5f4eC3Df9cbd43714FE2740f5E3616155c5b8419",
+          fixedPrice: "1000000000000000000",
+        },
+      ];
+      await expect(
+        new PriceOracle__factory(deployer).deploy(invalidConfigs)
+      ).to.be.revertedWith("InvalidPriceConfigs");
     });
   });
 });
