@@ -230,7 +230,7 @@ describe("PriceOracle", () => {
     });
     it("should return fixed price SAI as configured", async () => {
       const saiCToken = "0xF5DCe57282A584D2746FaF1593d3121Fcac444dC";
-      const formattedPrice = BigNumber.from("16616092000000000000");
+      const formattedPrice = BigNumber.from("15544520000000000000");
       expect(formattedPrice).to.equal(
         await priceOracle.getUnderlyingPrice(saiCToken)
       );
@@ -430,7 +430,7 @@ describe("PriceOracle", () => {
       const existingConfig = {
         cToken: "0xF5DCe57282A584D2746FaF1593d3121Fcac444dC",
         priceFeed: "0x0000000000000000000000000000000000000000",
-        fixedPrice: "16616092000000000000",
+        fixedPrice: "15544520000000000000",
       };
       const newPriceFeed = mockedEthAggregator.address;
       expect(
@@ -500,7 +500,7 @@ describe("PriceOracle", () => {
     const existingConfig = {
       cToken: "0xF5DCe57282A584D2746FaF1593d3121Fcac444dC",
       priceFeed: zeroAddress,
-      fixedPrice: "16616092000000000000",
+      fixedPrice: "15544520000000000000",
     };
 
     it("should return success updating existing fixed price", async () => {

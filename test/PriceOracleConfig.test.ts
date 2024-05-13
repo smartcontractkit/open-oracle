@@ -46,7 +46,7 @@ describe("PriceOracle", () => {
           cToken: "0xF5DCe57282A584D2746FaF1593d3121Fcac444dC",
           underlyingAssetDecimals: "18",
           priceFeed: zeroAddress,
-          fixedPrice: "16616092000000000000",
+          fixedPrice: "15544520000000000000",
         },
       ];
       const priceOracle = await new PriceOracle__factory(deployer).deploy(
