@@ -151,7 +151,7 @@ const parameters: TokenConfig[] = [
     cToken: "0xF5DCe57282A584D2746FaF1593d3121Fcac444dC",
     underlyingAssetDecimals: "18",
     priceFeed: "0x0000000000000000000000000000000000000000",
-    fixedPrice: "16616092000000000000",
+    fixedPrice: "15544520000000000000",
   },
 ];
 
