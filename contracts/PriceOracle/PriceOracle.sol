@@ -230,9 +230,9 @@ contract PriceOracle is Ownable2Step {
         TokenConfig memory config = tokenConfigs[cToken];
         // Check if config exists for cToken
         if (config.underlyingAssetDecimals == 0) revert ConfigNotFound(cToken);
-        // Validate price feed
+        // Validate fixed price
         if (fixedPrice == 0) revert MissingFixedPrice();
-        // Check if existing price feed is the same as the new one sent
+        // Check if existing fixed price is the same as the new one sent
         if (config.fixedPrice == fixedPrice) revert UnchangedFixedPrice(cToken, config.fixedPrice, fixedPrice);
 
         uint256 existingFixedPrice = config.fixedPrice;
