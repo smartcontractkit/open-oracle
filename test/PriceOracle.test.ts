@@ -330,7 +330,7 @@ describe("PriceOracle", () => {
       };
 
       await expect(priceOracle.addConfig(dupeConfig)).to.be.revertedWith(
-        "MissingPriceConfigs"
+        "InvalidPriceConfigs"
       );
     });
     it("should revert for both price feed and fixed price configs set", async () => {
@@ -474,7 +474,7 @@ describe("PriceOracle", () => {
 
       await expect(
         priceOracle.updateConfigPriceFeed(existingConfig.cToken, zeroAddress)
-      ).to.be.revertedWith("MissingPriceFeed");
+      ).to.be.revertedWith("InvalidPriceFeed");
     });
     it("should revert for feed decimals too high", async () => {
       const mockedEthAggregator = await deployMockContract(
@@ -551,7 +551,7 @@ describe("PriceOracle", () => {
     it("should revert for missing fixed price", async () => {
       await expect(
         priceOracle.updateConfigFixedPrice(existingConfig.cToken, 0)
-      ).to.be.revertedWith("MissingFixedPrice");
+      ).to.be.revertedWith("InvalidFixedPrice");
     });
     it("should revert for missing config", async () => {
       const missingCToken = "0x041171993284df560249B57358F931D9eB7b925D";

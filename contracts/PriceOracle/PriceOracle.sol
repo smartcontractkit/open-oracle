@@ -75,16 +75,16 @@ contract PriceOracle is Ownable2Step {
     error InvalidUnderlyingAssetDecimals();
 
     /// @notice Sum of price feed's decimals and underlyingAssetDecimals is greater than MAX_DECIMALS
+    /// @param decimals Sum of the feed's decimals and underlying asset decimals
     error FormattingDecimalsTooHigh(uint16 decimals);
 
     /// @notice Price feed missing
-    error MissingPriceFeed();
+    /// @param priceFeed Price feed address provided
+    error InvalidPriceFeed(address priceFeed);
 
     /// @notice Fixed price missing
-    error MissingFixedPrice();
-
-    /// @notice Both price feed and fixed price missing
-    error MissingPriceConfigs();
+    /// @param fixedPrice Fixed price provided
+    error InvalidFixedPrice(uint256 fixedPrice);
 
     /// @notice Price feed and fixed price are both set
     /// @param priceFeed Price feed provided
@@ -205,7 +205,7 @@ contract PriceOracle is Ownable2Step {
         // Check if config exists for cToken
         if (config.underlyingAssetDecimals == 0) revert ConfigNotFound(cToken);
         // Validate price feed
-        if (priceFeed == address(0)) revert MissingPriceFeed();
+        if (priceFeed == address(0)) revert InvalidPriceFeed(priceFeed);
         // Check if existing price feed is the same as the new one sent
         if (config.priceFeed == priceFeed) revert UnchangedPriceFeed(cToken, config.priceFeed, priceFeed);
         // Validate the decimals for the price feed since it could differ from the previous one
@@ -216,7 +216,7 @@ contract PriceOracle is Ownable2Step {
         TokenConfig storage storageConfig = tokenConfigs[cToken];
         storageConfig.priceFeed = priceFeed;
         if (config.fixedPrice != 0) {
-            storageConfig.fixedPrice = 0;
+            delete storageConfig.fixedPrice;
         }
         emit PriceOracleAssetPriceFeedUpdated(cToken, existingPriceFeed, priceFeed, existingFixedPrice);
     }
@@ -231,7 +231,7 @@ contract PriceOracle is Ownable2Step {
         // Check if config exists for cToken
         if (config.underlyingAssetDecimals == 0) revert ConfigNotFound(cToken);
         // Validate fixed price
-        if (fixedPrice == 0) revert MissingFixedPrice();
+        if (fixedPrice == 0) revert InvalidFixedPrice(fixedPrice);
         // Check if existing fixed price is the same as the new one sent
         if (config.fixedPrice == fixedPrice) revert UnchangedFixedPrice(cToken, config.fixedPrice, fixedPrice);
 
@@ -240,7 +240,7 @@ contract PriceOracle is Ownable2Step {
         TokenConfig storage storageConfig = tokenConfigs[cToken];
         storageConfig.fixedPrice = fixedPrice;
         if (config.priceFeed != address(0)) {
-            storageConfig.priceFeed = address(0);
+            delete storageConfig.priceFeed;
         }
         emit PriceOracleAssetFixedPriceUpdated(cToken, existingFixedPrice, fixedPrice, existingPriceFeed);
     }
@@ -265,7 +265,7 @@ contract PriceOracle is Ownable2Step {
     function _validateTokenConfig(LoadConfig memory config) internal view {
         if (config.cToken == address(0)) revert MissingCTokenAddress();
         // Check if both price feed and fixed price are empty
-        if (config.priceFeed == address(0) && config.fixedPrice == 0) revert MissingPriceConfigs();
+        if (config.priceFeed == address(0) && config.fixedPrice == 0) revert InvalidPriceConfigs(config.priceFeed, config.fixedPrice);
         // Check if both price feed and fixed price are set
         if (config.priceFeed != address(0) && config.fixedPrice != 0) revert InvalidPriceConfigs(config.priceFeed, config.fixedPrice);
         // Check if duplicate configs were submitted for the same cToken

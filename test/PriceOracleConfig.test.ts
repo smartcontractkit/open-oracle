@@ -157,7 +157,7 @@ describe("PriceOracle", () => {
       ];
       await expect(
         new PriceOracle__factory(deployer).deploy(invalidConfigs)
-      ).to.be.revertedWith("MissingPriceConfigs");
+      ).to.be.revertedWith("InvalidPriceConfigs");
     });
     it("reverts if both priceFeed and fixedPrice are set", async () => {
       const invalidConfigs: TokenConfig[] = [
