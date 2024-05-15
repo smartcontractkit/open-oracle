@@ -263,7 +263,10 @@ contract PriceOracle is Ownable2Step {
      * @param config TokenConfig struct that needs to be validated
      */
     function _validateTokenConfig(LoadConfig memory config) internal view {
+        // Check if cToken is zero address
         if (config.cToken == address(0)) revert MissingCTokenAddress();
+        // Check if underlyingAssetDecimals exists and non-zero
+        if (config.underlyingAssetDecimals == 0) revert InvalidUnderlyingAssetDecimals();
         // Check if both price feed and fixed price are empty
         if (config.priceFeed == address(0) && config.fixedPrice == 0) revert InvalidPriceConfigs(config.priceFeed, config.fixedPrice);
         // Check if both price feed and fixed price are set
@@ -281,8 +284,6 @@ contract PriceOracle is Ownable2Step {
      * @param underlyingAssetDecimals The underlying asset decimals set in the config
      */
      function _validateDecimals(address priceFeed, uint8 underlyingAssetDecimals) internal view {
-        // Check underlyingAssetDecimals exists and non-zero
-        if (underlyingAssetDecimals == 0) revert InvalidUnderlyingAssetDecimals();
         AggregatorV3Interface aggregator = AggregatorV3Interface(priceFeed);
         // Retrieve decimals from feed for formatting
         uint8 feedDecimals = aggregator.decimals();

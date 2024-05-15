@@ -346,16 +346,25 @@ describe("PriceOracle", () => {
       );
     });
     it("should revert for 0 underlyingAssetDecimals in config", async () => {
-      const invalidConfig: TokenConfig = {
+      const invalidConfigWithPriceFeed: TokenConfig = {
         cToken: "0x041171993284df560249B57358F931D9eB7b925D",
         underlyingAssetDecimals: "0",
         priceFeed: "0x09023c0da49aaf8fc3fa3adf34c6a7016d38d5e3",
         fixedPrice: "0",
       };
+      const invalidConfigWithFixedPrice: TokenConfig = {
+        cToken: "0x041171993284df560249B57358F931D9eB7b925D",
+        underlyingAssetDecimals: "0",
+        priceFeed: zeroAddress,
+        fixedPrice: "1000",
+      };
 
-      await expect(priceOracle.addConfig(invalidConfig)).to.be.revertedWith(
-        "InvalidUnderlyingAssetDecimals"
-      );
+      await expect(
+        priceOracle.addConfig(invalidConfigWithPriceFeed)
+      ).to.be.revertedWith("InvalidUnderlyingAssetDecimals");
+      await expect(
+        priceOracle.addConfig(invalidConfigWithFixedPrice)
+      ).to.be.revertedWith("InvalidUnderlyingAssetDecimals");
     });
     it("should revert for underlyingAssetDecimals too high in config", async () => {
       const mockedEthAggregator = await deployMockContract(
