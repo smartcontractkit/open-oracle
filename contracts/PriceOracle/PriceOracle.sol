@@ -7,15 +7,19 @@ import { AggregatorV3Interface } from "@chainlink/contracts/src/v0.8/interfaces/
 contract PriceOracle is Ownable2Step {
 
     /// @dev Configuration used to return the USD price for the associated cToken asset and base unit needed for formatting
+    /// @dev Fixed price is returned for assets that do not have a price feed. Expected to already be formatted.
     struct TokenConfig {
-        // Decimals of the underlying asset (e.g. 18 for ETH)
+        // Decimals of the underlying asset (e.g. 18 for ETH). Needed for formatting when using a price feed. Ignored when using fixed price.
         uint8 underlyingAssetDecimals;
         // Address of the feed used to retrieve the asset's price
         address priceFeed;
+        // Fixed price for asset that does not have a price feed
+        uint256 fixedPrice;
     }
 
     /// @dev Type used to load the contract with configs during deployment
-    /// There should be 1 LoadConfig object for each supported asset, passed in the constructor.
+    /// @dev There should be 1 LoadConfig object for each supported asset, passed in the constructor.
+    /// @dev Price feed and fixed price are mutually exclusive. Only one or the other should be set.
     struct LoadConfig {
         // Decimals of the underlying asset (e.g. 18 for ETH)
         uint8 underlyingAssetDecimals;
@@ -23,6 +27,8 @@ contract PriceOracle is Ownable2Step {
         address cToken;
         // Address of the feed used to retrieve the asset's price
         address priceFeed;
+        // Fixed price for asset that does not have a price feed
+        uint256 fixedPrice;
     }
 
     /// @dev Mapping of cToken address to TokenConfig used to maintain the supported assets
@@ -32,19 +38,29 @@ contract PriceOracle is Ownable2Step {
     /// @param cToken cToken address that the config was added for
     /// @param underlyingAssetDecimals Decimals of the underlying asset
     /// @param priceFeed Address of the feed used to retrieve the asset's price
-    event PriceOracleAssetAdded(address indexed cToken, uint8 underlyingAssetDecimals, address priceFeed);
+    /// @param fixedPrice The fixed price returned when a price feed does not exist for an asset
+    event PriceOracleAssetAdded(address indexed cToken, uint8 underlyingAssetDecimals, address priceFeed, uint256 fixedPrice);
 
     /// @notice The event emitted when the price feed for an existing config is updated
     /// @param cToken cToken address that the config was updated for
     /// @param oldPriceFeed The existing price feed address configured in the token config
     /// @param newPriceFeed The new price feed address the token config is being updated to
-    event PriceOracleAssetPriceFeedUpdated(address indexed cToken, address oldPriceFeed, address newPriceFeed);
+    /// @param oldFixedPrice The fixed price previously set in the config. Price feed updates clear the fixed price if not 0 already.
+    event PriceOracleAssetPriceFeedUpdated(address indexed cToken, address oldPriceFeed, address newPriceFeed, uint256 oldFixedPrice);
+
+    /// @notice The event emitted when the fixed price for an existing config is updated
+    /// @param cToken cToken address that the config was updated for
+    /// @param oldFixedPrice The existing fixed price set in the token config
+    /// @param newFixedPrice The new fixed price set in the token config
+    /// @param oldPriceFeed The price feed previously set in the config. Fixed price updates clear the price feed if 0 not already.
+    event PriceOracleAssetFixedPriceUpdated(address indexed cToken, uint256 oldFixedPrice, uint256 newFixedPrice, address oldPriceFeed);
 
     /// @notice The event emitted when an asset is removed to the mapping
     /// @param cToken cToken address that the config was removed for
     /// @param underlyingAssetDecimals Decimals of the underlying asset in the removed config.
-    /// @param priceFeed Address price feed set in the removed config
-    event PriceOracleAssetRemoved(address indexed cToken, uint8 underlyingAssetDecimals, address priceFeed);
+    /// @param priceFeed Price feed address set in the removed config
+    /// @param fixedPrice The fixed price set in the removed config
+    event PriceOracleAssetRemoved(address indexed cToken, uint8 underlyingAssetDecimals, address priceFeed, uint256 fixedPrice);
 
     /// @notice The max decimals value allowed for price feed
     uint8 internal constant MAX_DECIMALS = 72;
@@ -59,11 +75,21 @@ contract PriceOracle is Ownable2Step {
     error InvalidUnderlyingAssetDecimals();
 
     /// @notice Sum of price feed's decimals and underlyingAssetDecimals is greater than MAX_DECIMALS
+    /// @param decimals Sum of the feed's decimals and underlying asset decimals
     error FormattingDecimalsTooHigh(uint16 decimals);
 
-    /// @notice Price feed missing or duplicated
+    /// @notice Price feed missing
     /// @param priceFeed Price feed address provided
     error InvalidPriceFeed(address priceFeed);
+
+    /// @notice Fixed price missing
+    /// @param fixedPrice Fixed price provided
+    error InvalidFixedPrice(uint256 fixedPrice);
+
+    /// @notice Price feed and fixed price are both set
+    /// @param priceFeed Price feed provided
+    /// @param fixedPrice Fixed price provided
+    error InvalidPriceConfigs(address priceFeed, uint256 fixedPrice);
 
     /// @notice Config already exists
     /// @param cToken cToken address provided
@@ -73,11 +99,17 @@ contract PriceOracle is Ownable2Step {
     /// @param cToken cToken address provided
     error ConfigNotFound(address cToken);
 
-    /// @notice Same price feed as the existing one was provided when updating the price feed config
+    /// @notice Same price feed as the existing one was provided when updating the config
     /// @param cToken cToken address that the price feed update is for
     /// @param existingPriceFeed Price feed address set in the existing config
     /// @param newPriceFeed Price feed address provided to update to
     error UnchangedPriceFeed(address cToken, address existingPriceFeed, address newPriceFeed);
+
+    /// @notice Same fixed price as the existing one was provided when updating the config
+    /// @param cToken cToken address that the fixed price update is for
+    /// @param existingFixedPrice The fixed price set in the existing config
+    /// @param newFixedPrice The fixed price provided to update to
+    error UnchangedFixedPrice(address cToken, uint256 existingFixedPrice, uint256 newFixedPrice);
 
     /**
      * @notice Construct a Price Oracle contract for a set of token configurations
@@ -107,7 +139,10 @@ contract PriceOracle is Ownable2Step {
         returns (uint256)
     {
         TokenConfig memory config = tokenConfigs[cToken];
-        if (config.priceFeed == address(0)) revert ConfigNotFound(cToken);
+        // Check if config exists for cToken
+        if (config.underlyingAssetDecimals == 0) revert ConfigNotFound(cToken);
+        // Return fixed price if set
+        if (config.fixedPrice != 0) return config.fixedPrice;
         // Initialize the aggregator to read the price from
         AggregatorV3Interface priceFeed = AggregatorV3Interface(config.priceFeed);
         // Retrieve decimals from feed for formatting
@@ -145,7 +180,7 @@ contract PriceOracle is Ownable2Step {
     function getConfig(address cToken) external view returns (TokenConfig memory) {
         TokenConfig memory config = tokenConfigs[cToken];
         // Check if config exists for cToken
-        if (config.priceFeed == address(0)) revert ConfigNotFound(cToken);
+        if (config.underlyingAssetDecimals == 0) revert ConfigNotFound(cToken);
         return config;
     }
 
@@ -155,20 +190,20 @@ contract PriceOracle is Ownable2Step {
      */
     function addConfig(LoadConfig memory config) public onlyOwner {
         _validateTokenConfig(config);
-        TokenConfig memory tokenConfig = TokenConfig(config.underlyingAssetDecimals, config.priceFeed);
+        TokenConfig memory tokenConfig = TokenConfig(config.underlyingAssetDecimals, config.priceFeed, config.fixedPrice);
         tokenConfigs[config.cToken] = tokenConfig;
-        emit PriceOracleAssetAdded(config.cToken, config.underlyingAssetDecimals, config.priceFeed);
+        emit PriceOracleAssetAdded(config.cToken, config.underlyingAssetDecimals, config.priceFeed, config.fixedPrice);
     }
 
     /**
-     * @notice Updates the price feed in the token config for a particular cToken
+     * @notice Updates the price feed in the token config for a particular cToken and sets fixed price to 0 if it is not already.
      * @param cToken The cToken address that the config needs to be updated for
      * @param priceFeed The address of the new price feed the config needs to be updated to
      */
     function updateConfigPriceFeed(address cToken, address priceFeed) external onlyOwner {
         TokenConfig memory config = tokenConfigs[cToken];
         // Check if config exists for cToken
-        if (config.priceFeed == address(0)) revert ConfigNotFound(cToken);
+        if (config.underlyingAssetDecimals == 0) revert ConfigNotFound(cToken);
         // Validate price feed
         if (priceFeed == address(0)) revert InvalidPriceFeed(priceFeed);
         // Check if existing price feed is the same as the new one sent
@@ -177,8 +212,37 @@ contract PriceOracle is Ownable2Step {
         _validateDecimals(priceFeed, config.underlyingAssetDecimals);
 
         address existingPriceFeed = config.priceFeed;
-        tokenConfigs[cToken].priceFeed = priceFeed;
-        emit PriceOracleAssetPriceFeedUpdated(cToken, existingPriceFeed, priceFeed);
+        uint256 existingFixedPrice = config.fixedPrice;
+        TokenConfig storage storageConfig = tokenConfigs[cToken];
+        storageConfig.priceFeed = priceFeed;
+        if (config.fixedPrice != 0) {
+            delete storageConfig.fixedPrice;
+        }
+        emit PriceOracleAssetPriceFeedUpdated(cToken, existingPriceFeed, priceFeed, existingFixedPrice);
+    }
+
+    /**
+     * @notice Updates the fixed price in the token config for a particular cToken and sets price feed to 0 if it is not already.
+     * @param cToken The cToken address that the config needs to be updated for
+     * @param fixedPrice The fixed price to be returned for the asset. Expected to be formatted.
+     */
+    function updateConfigFixedPrice(address cToken, uint256 fixedPrice) external onlyOwner {
+        TokenConfig memory config = tokenConfigs[cToken];
+        // Check if config exists for cToken
+        if (config.underlyingAssetDecimals == 0) revert ConfigNotFound(cToken);
+        // Validate fixed price
+        if (fixedPrice == 0) revert InvalidFixedPrice(fixedPrice);
+        // Check if existing fixed price is the same as the new one sent
+        if (config.fixedPrice == fixedPrice) revert UnchangedFixedPrice(cToken, config.fixedPrice, fixedPrice);
+
+        uint256 existingFixedPrice = config.fixedPrice;
+        address existingPriceFeed = config.priceFeed;
+        TokenConfig storage storageConfig = tokenConfigs[cToken];
+        storageConfig.fixedPrice = fixedPrice;
+        if (config.priceFeed != address(0)) {
+            delete storageConfig.priceFeed;
+        }
+        emit PriceOracleAssetFixedPriceUpdated(cToken, existingFixedPrice, fixedPrice, existingPriceFeed);
     }
 
     /**
@@ -188,10 +252,9 @@ contract PriceOracle is Ownable2Step {
     function removeConfig(address cToken) external onlyOwner {
         TokenConfig memory config = tokenConfigs[cToken];
         // Check if config exists for cToken
-        if (config.priceFeed == address(0)) revert ConfigNotFound(cToken);
-
+        if (config.underlyingAssetDecimals == 0) revert ConfigNotFound(cToken);
         delete tokenConfigs[cToken];
-        emit PriceOracleAssetRemoved(cToken, config.underlyingAssetDecimals, config.priceFeed);
+        emit PriceOracleAssetRemoved(cToken, config.underlyingAssetDecimals, config.priceFeed, config.fixedPrice);
     }
 
     /**
@@ -200,11 +263,19 @@ contract PriceOracle is Ownable2Step {
      * @param config TokenConfig struct that needs to be validated
      */
     function _validateTokenConfig(LoadConfig memory config) internal view {
+        // Check if cToken is zero address
         if (config.cToken == address(0)) revert MissingCTokenAddress();
-        if (config.priceFeed == address(0)) revert InvalidPriceFeed(config.priceFeed);
+        // Check if underlyingAssetDecimals exists and non-zero
+        if (config.underlyingAssetDecimals == 0) revert InvalidUnderlyingAssetDecimals();
+        // Check if both price feed and fixed price are empty
+        if (config.priceFeed == address(0) && config.fixedPrice == 0) revert InvalidPriceConfigs(config.priceFeed, config.fixedPrice);
+        // Check if both price feed and fixed price are set
+        if (config.priceFeed != address(0) && config.fixedPrice != 0) revert InvalidPriceConfigs(config.priceFeed, config.fixedPrice);
         // Check if duplicate configs were submitted for the same cToken
-        if (tokenConfigs[config.cToken].priceFeed != address(0)) revert DuplicateConfig(config.cToken);
-        _validateDecimals(config.priceFeed, config.underlyingAssetDecimals);
+        if (tokenConfigs[config.cToken].underlyingAssetDecimals != 0) revert DuplicateConfig(config.cToken);
+        if (config.priceFeed != address(0)) {
+            _validateDecimals(config.priceFeed, config.underlyingAssetDecimals);
+        }
     }
 
     /**
@@ -213,8 +284,6 @@ contract PriceOracle is Ownable2Step {
      * @param underlyingAssetDecimals The underlying asset decimals set in the config
      */
      function _validateDecimals(address priceFeed, uint8 underlyingAssetDecimals) internal view {
-        // Check underlyingAssetDecimals exists and non-zero
-        if (underlyingAssetDecimals == 0) revert InvalidUnderlyingAssetDecimals();
         AggregatorV3Interface aggregator = AggregatorV3Interface(priceFeed);
         // Retrieve decimals from feed for formatting
         uint8 feedDecimals = aggregator.decimals();
