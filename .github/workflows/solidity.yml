@@ -13,7 +13,7 @@ jobs:
       - name: Checkout the repo
         uses: actions/checkout@v2
       - name: Yarn cache
-        uses: actions/cache@v2
+        uses: actions/cache@0c45773b623bea8c8e75f6c82b208c3cf94ea4f9 # v4.0.2
         env:
           cache-name: yarn-cache
         with:
@@ -46,7 +46,7 @@ jobs:
       - name: Checkout the repo
         uses: actions/checkout@v2
       - name: Yarn cache
-        uses: actions/cache@v2
+        uses: actions/cache@0c45773b623bea8c8e75f6c82b208c3cf94ea4f9 # v4.0.2
         env:
           cache-name: yarn-cache
         with:
@@ -80,7 +80,7 @@ jobs:
       - name: Checkout the repo
         uses: actions/checkout@v2
       - name: Yarn cache
-        uses: actions/cache@v2
+        uses: actions/cache@0c45773b623bea8c8e75f6c82b208c3cf94ea4f9 # v4.0.2
         env:
           cache-name: yarn-cache
         with:
