@@ -277,11 +277,6 @@ describe("PriceOracle", () => {
         );
     });
     it("should return success with fixed price", async () => {
-      const mockedEthAggregator = await deployMockContract(
-        deployer,
-        mockAggregatorAbi
-      );
-      await mockedEthAggregator.mock.decimals.returns(8);
       const newConfig: TokenConfig = {
         cToken: "0x944DD1c7ce133B75880CeE913d513f8C07312393",
         underlyingAssetDecimals: "18",
@@ -345,26 +340,27 @@ describe("PriceOracle", () => {
         "InvalidPriceConfigs"
       );
     });
-    it("should revert for 0 underlyingAssetDecimals in config", async () => {
-      const invalidConfigWithPriceFeed: TokenConfig = {
+    it("should succeed for 0 underlyingAssetDecimals in config", async () => {
+      const mockedEthAggregator = await deployMockContract(
+        deployer,
+        mockAggregatorAbi
+      );
+      await mockedEthAggregator.mock.decimals.returns(8);
+      const zeroDecimalConfig: TokenConfig = {
         cToken: "0x041171993284df560249B57358F931D9eB7b925D",
         underlyingAssetDecimals: "0",
-        priceFeed: "0x09023c0da49aaf8fc3fa3adf34c6a7016d38d5e3",
+        priceFeed: mockedEthAggregator.address,
         fixedPrice: "0",
       };
-      const invalidConfigWithFixedPrice: TokenConfig = {
-        cToken: "0x041171993284df560249B57358F931D9eB7b925D",
-        underlyingAssetDecimals: "0",
-        priceFeed: zeroAddress,
-        fixedPrice: "1000",
-      };
 
-      await expect(
-        priceOracle.addConfig(invalidConfigWithPriceFeed)
-      ).to.be.revertedWith("InvalidUnderlyingAssetDecimals");
-      await expect(
-        priceOracle.addConfig(invalidConfigWithFixedPrice)
-      ).to.be.revertedWith("InvalidUnderlyingAssetDecimals");
+      expect(await priceOracle.addConfig(zeroDecimalConfig))
+        .to.emit(priceOracle, "PriceOracleAssetAdded")
+        .withArgs(
+          zeroDecimalConfig.cToken,
+          0,
+          zeroDecimalConfig.priceFeed,
+          zeroDecimalConfig.fixedPrice
+        );
     });
     it("should revert for underlyingAssetDecimals too high in config", async () => {
       const mockedEthAggregator = await deployMockContract(
