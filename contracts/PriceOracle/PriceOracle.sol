@@ -256,7 +256,7 @@ contract PriceOracle is Ownable2Step {
 
     /**
      * @notice Validates a token config and confirms one for the cToken does not already exist in mapping
-     * @dev All fields are required
+     * @dev All fields are required. Underlying asset decimals is allowed to be 0 to support 0 decimal ERC20 tokens.
      * @param config TokenConfig struct that needs to be validated
      */
     function _validateTokenConfig(LoadConfig memory config) internal view {
