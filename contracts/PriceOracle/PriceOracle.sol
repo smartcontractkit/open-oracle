@@ -71,9 +71,6 @@ contract PriceOracle is Ownable2Step {
     /// @notice cToken address for config not provided
     error MissingCTokenAddress();
 
-    /// @notice UnderlyingAssetDecimals is missing or set to value 0
-    error InvalidUnderlyingAssetDecimals();
-
     /// @notice Sum of price feed's decimals and underlyingAssetDecimals is greater than MAX_DECIMALS
     /// @param decimals Sum of the feed's decimals and underlying asset decimals
     error FormattingDecimalsTooHigh(uint16 decimals);
@@ -140,7 +137,7 @@ contract PriceOracle is Ownable2Step {
     {
         TokenConfig memory config = tokenConfigs[cToken];
         // Check if config exists for cToken
-        if (config.underlyingAssetDecimals == 0) revert ConfigNotFound(cToken);
+        if (config.priceFeed == address(0) && config.fixedPrice == 0) revert ConfigNotFound(cToken);
         // Return fixed price if set
         if (config.fixedPrice != 0) return config.fixedPrice;
         // Initialize the aggregator to read the price from
@@ -180,7 +177,7 @@ contract PriceOracle is Ownable2Step {
     function getConfig(address cToken) external view returns (TokenConfig memory) {
         TokenConfig memory config = tokenConfigs[cToken];
         // Check if config exists for cToken
-        if (config.underlyingAssetDecimals == 0) revert ConfigNotFound(cToken);
+        if (config.priceFeed == address(0) && config.fixedPrice == 0) revert ConfigNotFound(cToken);
         return config;
     }
 
@@ -203,7 +200,7 @@ contract PriceOracle is Ownable2Step {
     function updateConfigPriceFeed(address cToken, address priceFeed) external onlyOwner {
         TokenConfig memory config = tokenConfigs[cToken];
         // Check if config exists for cToken
-        if (config.underlyingAssetDecimals == 0) revert ConfigNotFound(cToken);
+        if (config.priceFeed == address(0) && config.fixedPrice == 0) revert ConfigNotFound(cToken);
         // Validate price feed
         if (priceFeed == address(0)) revert InvalidPriceFeed(priceFeed);
         // Check if existing price feed is the same as the new one sent
@@ -229,7 +226,7 @@ contract PriceOracle is Ownable2Step {
     function updateConfigFixedPrice(address cToken, uint256 fixedPrice) external onlyOwner {
         TokenConfig memory config = tokenConfigs[cToken];
         // Check if config exists for cToken
-        if (config.underlyingAssetDecimals == 0) revert ConfigNotFound(cToken);
+        if (config.priceFeed == address(0) && config.fixedPrice == 0) revert ConfigNotFound(cToken);
         // Validate fixed price
         if (fixedPrice == 0) revert InvalidFixedPrice(fixedPrice);
         // Check if existing fixed price is the same as the new one sent
@@ -252,27 +249,26 @@ contract PriceOracle is Ownable2Step {
     function removeConfig(address cToken) external onlyOwner {
         TokenConfig memory config = tokenConfigs[cToken];
         // Check if config exists for cToken
-        if (config.underlyingAssetDecimals == 0) revert ConfigNotFound(cToken);
+        if (config.priceFeed == address(0) && config.fixedPrice == 0) revert ConfigNotFound(cToken);
         delete tokenConfigs[cToken];
         emit PriceOracleAssetRemoved(cToken, config.underlyingAssetDecimals, config.priceFeed, config.fixedPrice);
     }
 
     /**
      * @notice Validates a token config and confirms one for the cToken does not already exist in mapping
-     * @dev All fields are required
+     * @dev All fields are required. Underlying asset decimals is allowed to be 0 to support 0 decimal ERC20 tokens.
      * @param config TokenConfig struct that needs to be validated
      */
     function _validateTokenConfig(LoadConfig memory config) internal view {
         // Check if cToken is zero address
         if (config.cToken == address(0)) revert MissingCTokenAddress();
-        // Check if underlyingAssetDecimals exists and non-zero
-        if (config.underlyingAssetDecimals == 0) revert InvalidUnderlyingAssetDecimals();
         // Check if both price feed and fixed price are empty
         if (config.priceFeed == address(0) && config.fixedPrice == 0) revert InvalidPriceConfigs(config.priceFeed, config.fixedPrice);
         // Check if both price feed and fixed price are set
         if (config.priceFeed != address(0) && config.fixedPrice != 0) revert InvalidPriceConfigs(config.priceFeed, config.fixedPrice);
+        TokenConfig memory existingConfig = tokenConfigs[config.cToken];
         // Check if duplicate configs were submitted for the same cToken
-        if (tokenConfigs[config.cToken].underlyingAssetDecimals != 0) revert DuplicateConfig(config.cToken);
+        if (existingConfig.priceFeed != address(0) || existingConfig.fixedPrice != 0) revert DuplicateConfig(config.cToken);
         if (config.priceFeed != address(0)) {
             _validateDecimals(config.priceFeed, config.underlyingAssetDecimals);
         }

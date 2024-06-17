@@ -7,6 +7,7 @@ import { TokenConfig } from "../configuration/parameters-price-oracle";
 import { resetFork } from "./utils";
 import { deployMockContract } from "ethereum-waffle";
 import { mockAggregatorAbi } from "./PriceOracle.test";
+import { BigNumber } from "ethers";
 
 use(smock.matchers);
 
@@ -48,23 +49,54 @@ describe("PriceOracle", () => {
           priceFeed: zeroAddress,
           fixedPrice: "15544520000000000000",
         },
+        // 0 underlying decimal
+        {
+          cToken: "0xccf4429db6322d5c611ee964527d42e5d685dd6a",
+          underlyingAssetDecimals: "0",
+          priceFeed: "0x5f4eC3Df9cbd43714FE2740f5E3616155c5b8419",
+          fixedPrice: "0",
+        },
       ];
       const priceOracle = await new PriceOracle__factory(deployer).deploy(
         configs
       );
+      // Validate config 1
       const config1 = configs[0];
       const returnedConfig1 = await priceOracle.getConfig(config1.cToken);
       expect(returnedConfig1.underlyingAssetDecimals).to.equal(
         Number(config1.underlyingAssetDecimals)
       );
       expect(returnedConfig1.priceFeed).to.equal(config1.priceFeed);
+      expect(returnedConfig1.fixedPrice).to.equal(0);
 
+      // Validate config 2
       const config2 = configs[1];
       const returnedConfig2 = await priceOracle.getConfig(config2.cToken);
       expect(returnedConfig2.underlyingAssetDecimals).to.equal(
         Number(config2.underlyingAssetDecimals)
       );
       expect(returnedConfig2.priceFeed).to.equal(config2.priceFeed);
+      expect(returnedConfig2.fixedPrice).to.equal(0);
+
+      // Validate config 3
+      const config3 = configs[2];
+      const returnedConfig3 = await priceOracle.getConfig(config3.cToken);
+      expect(returnedConfig3.underlyingAssetDecimals).to.equal(
+        Number(config3.underlyingAssetDecimals)
+      );
+      expect(returnedConfig3.priceFeed).to.equal(config3.priceFeed);
+      expect(returnedConfig3.fixedPrice).to.equal(
+        BigNumber.from(config3.fixedPrice)
+      );
+
+      // Validate config 4
+      const config4 = configs[3];
+      const returnedConfig4 = await priceOracle.getConfig(config4.cToken);
+      expect(returnedConfig4.underlyingAssetDecimals).to.equal(
+        Number(config4.underlyingAssetDecimals)
+      );
+      expect(returnedConfig4.priceFeed).to.equal(config4.priceFeed);
+      expect(returnedConfig4.fixedPrice).to.equal(0);
 
       const invalidCToken = "0x39AA39c021dfbaE8faC545936693aC917d5E7563";
       expect(priceOracle.getConfig(invalidCToken)).to.be.revertedWith(
@@ -114,19 +146,6 @@ describe("PriceOracle", () => {
       await expect(
         new PriceOracle__factory(deployer).deploy(invalidConfigs)
       ).to.be.revertedWith("MissingCTokenAddress");
-    });
-    it("reverts if underlyingAssetDecimals is 0", async () => {
-      const invalidConfigs: TokenConfig[] = [
-        {
-          cToken: "0x4Ddc2D193948926D02f9B1fE9e1daa0718270ED5",
-          underlyingAssetDecimals: "0",
-          priceFeed: "0x5f4eC3Df9cbd43714FE2740f5E3616155c5b8419",
-          fixedPrice: "0",
-        },
-      ];
-      await expect(
-        new PriceOracle__factory(deployer).deploy(invalidConfigs)
-      ).to.be.revertedWith("InvalidUnderlyingAssetDecimals");
     });
     it("reverts if feed decimals are too high", async () => {
       const mockedEthAggregator = await deployMockContract(
