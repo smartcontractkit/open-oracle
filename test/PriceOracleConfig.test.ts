@@ -103,6 +103,19 @@ describe("PriceOracle", () => {
         "ConfigNotFound"
       );
     });
+    it("reverts if underlyingAssetDecimals is too high", async () => {
+      const invalidConfigs: TokenConfig[] = [
+        {
+          cToken: "0x4Ddc2D193948926D02f9B1fE9e1daa0718270ED5",
+          underlyingAssetDecimals: "31",
+          priceFeed: "0x5f4eC3Df9cbd43714FE2740f5E3616155c5b8419",
+          fixedPrice: "0",
+        },
+      ];
+      await expect(
+        new PriceOracle__factory(deployer).deploy(invalidConfigs)
+      ).to.be.revertedWith("InvalidUnderlyingAssetDecimals");
+    });
     it("reverts if repeating configs", async () => {
       const repeatConfigs: TokenConfig[] = [
         {

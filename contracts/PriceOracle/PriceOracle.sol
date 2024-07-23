@@ -68,12 +68,19 @@ contract PriceOracle is Ownable2Step {
     /// @notice The number of digits the price is scaled to before adjusted by the base units
     uint8 internal constant PRICE_SCALE = 36;
 
+    /// @notice The minimum number of digits of precision to preserve when formatting by restricting the underlying asset decimals config
+    /// @dev Minimum precision is set to 6 to match the Compound UniswapAnchoredView behavior
+    uint8 internal constant MIN_PRECISION = 6;
+
     /// @notice cToken address for config not provided
     error MissingCTokenAddress();
 
     /// @notice Sum of price feed's decimals and underlyingAssetDecimals is greater than MAX_DECIMALS
     /// @param decimals Sum of the feed's decimals and underlying asset decimals
     error FormattingDecimalsTooHigh(uint16 decimals);
+
+    /// @notice UnderlyingAssetDecimals is set too high to honor the minimum precision required during formatting
+    error InvalidUnderlyingAssetDecimals(uint8 underlyingAssetDecimals); 
 
     /// @notice Price feed missing
     /// @param priceFeed Price feed address provided
@@ -280,6 +287,8 @@ contract PriceOracle is Ownable2Step {
      * @param underlyingAssetDecimals The underlying asset decimals set in the config
      */
      function _validateDecimals(address priceFeed, uint8 underlyingAssetDecimals) internal view {
+        // Check if underlying asset decimals is too high to honor minimum precision during formatting
+        if (underlyingAssetDecimals > PRICE_SCALE - MIN_PRECISION) revert InvalidUnderlyingAssetDecimals(underlyingAssetDecimals);
         AggregatorV3Interface aggregator = AggregatorV3Interface(priceFeed);
         // Retrieve decimals from feed for formatting
         uint8 feedDecimals = aggregator.decimals();
