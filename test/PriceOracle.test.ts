@@ -362,15 +362,31 @@ describe("PriceOracle", () => {
           zeroDecimalConfig.fixedPrice
         );
     });
-    it("should revert for underlyingAssetDecimals too high in config", async () => {
+    it("should revert for underlyingAssetDecimals too high for min precision", async () => {
       const mockedEthAggregator = await deployMockContract(
         deployer,
         mockAggregatorAbi
       );
       await mockedEthAggregator.mock.decimals.returns(8);
+      const invalidConfigWithPriceFeed: TokenConfig = {
+        cToken: "0x80a2AE356fc9ef4305676f7a3E2Ed04e12C33946",
+        underlyingAssetDecimals: "31",
+        priceFeed: mockedEthAggregator.address,
+        fixedPrice: "0",
+      };
+      await expect(
+        priceOracle.addConfig(invalidConfigWithPriceFeed)
+      ).to.be.revertedWith("InvalidUnderlyingAssetDecimals");
+    });
+    it("should revert for formatting decimals too high", async () => {
+      const mockedEthAggregator = await deployMockContract(
+        deployer,
+        mockAggregatorAbi
+      );
+      await mockedEthAggregator.mock.decimals.returns(45);
       const invalidConfig: TokenConfig = {
         cToken: "0x041171993284df560249B57358F931D9eB7b925D",
-        underlyingAssetDecimals: "75",
+        underlyingAssetDecimals: "30",
         priceFeed: mockedEthAggregator.address,
         fixedPrice: "0",
       };
